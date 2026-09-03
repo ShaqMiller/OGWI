@@ -193,7 +193,7 @@ export async function finaliseRun(params: {
   passed: boolean;
   submittedAt: Date;
 }): Promise<boolean> {
-  const [, runUpdate] = await prisma.$transaction([
+  const results = await prisma.$transaction([
     ...params.marks.map((mark) =>
       prisma.examRunItem.updateMany({
         where: { id: mark.itemId },
@@ -212,9 +212,11 @@ export async function finaliseRun(params: {
     }),
   ]);
 
-  // $transaction returns results positionally; the run update is last.
-  const updates = runUpdate as unknown as { count: number };
-  return updates.count > 0;
+  // $transaction returns results positionally, and the run update is last -
+  // so it is at index marks.length, not 1. Reading index 1 happened to work
+  // only for a one-question paper; on any real paper it read an item update.
+  const runUpdate = results[results.length - 1] as { count: number };
+  return runUpdate.count > 0;
 }
 
 /**

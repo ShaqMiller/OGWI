@@ -3,15 +3,15 @@ import {
   PACE_WINDOW_DAYS,
   READINESS_CELEBRATION_THRESHOLD,
   READINESS_DISPLAY_WITHHOLD_THRESHOLD,
-  READINESS_FAIR_COVERAGE_THRESHOLD,
+  READINESS_FAIR_RUN_WINDOW_DAYS,
   READINESS_PROJECTION_DAYS,
   READINESS_SIGMA_BASE,
   READINESS_SIGMA_FLOOR,
-  READINESS_SOLID_COVERAGE_THRESHOLD,
 } from '@ogwi/shared';
 import * as masteryRepository from '../mastery/mastery.repository.js';
 import { mean, weightedObjectiveMean } from '../mastery/mastery.service.js';
 import { liveRetrievability } from '../scheduler/fsrs.util.js';
+import { resolveCertaintyBand } from './certainty-band.util.js';
 import { normalCdf } from './normal-cdf.util.js';
 import * as readinessRepository from './readiness.repository.js';
 import type { CertaintyBand, ReadinessResult } from './readiness.types.js';
@@ -20,15 +20,17 @@ import type { CertaintyBand, ReadinessResult } from './readiness.types.js';
  * Business logic only. Never touches req/res, never imports Prisma types.
  *
  * Simplified from Doc 2 B2 - see packages/shared/src/constants/readiness.constants.ts
- * for what and why. Two deliberate deviations worth restating here:
- *   - Certainty bands are computed from weighted coverage alone. The spec
- *     also requires exam-format run evidence, which this build has no way
- *     to ever produce (no mock/exam system exists) - gating on it would
- *     make the band permanently stuck at "early", which defeats the point
- *     of having it.
+ * for what and why. One deliberate deviation remains:
  *   - sigma is a simple coverage-only heuristic (thin evidence -> wide
  *     uncertainty -> odds pulled toward the middle), not the spec's
- *     multi-factor formula.
+ *     multi-factor formula. mu likewise has no calibration term
+ *     (ratio = achieved score / projection), which exam runs now make
+ *     possible but which is a separate piece of work.
+ *
+ * Certainty bands used to be a second deviation, computed from coverage
+ * alone because no exam system existed to produce run evidence. Exam
+ * Simulation produces it now, so the band applies the spec's full rule -
+ * see certainty-band.util.ts.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -74,12 +76,12 @@ export async function computeReadiness(
   const oddsRaw = normalCdf((mu - passMark) / sigma);
   const withheld = oddsRaw < READINESS_DISPLAY_WITHHOLD_THRESHOLD;
 
-  const certaintyBand: CertaintyBand =
-    weightedCoverage >= READINESS_SOLID_COVERAGE_THRESHOLD
-      ? 'solid'
-      : weightedCoverage >= READINESS_FAIR_COVERAGE_THRESHOLD
-        ? 'fair'
-        : 'early';
+  const examRunDates = await readinessRepository.findSubmittedExamRunDates(
+    learnerId,
+    qualificationId,
+    addDays(now, -READINESS_FAIR_RUN_WINDOW_DAYS),
+  );
+  const certaintyBand: CertaintyBand = resolveCertaintyBand(weightedCoverage, examRunDates, now);
 
   const coveredCount = allItemIds.filter((id) => states.has(id)).length;
   const itemsRemaining = allItemIds.length - coveredCount;

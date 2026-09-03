@@ -45,12 +45,46 @@ describe('computeReadiness', () => {
     const result = await readinessService.computeReadiness(learnerId, qualificationId, passMark);
 
     expect(result.weightedCoveragePercent).toBe(100);
-    expect(result.certaintyBand).toBe('solid');
     expect(result.forecast.itemsRemaining).toBe(0);
     // Fully covered and freshly graded -> comfortably above the withhold
     // threshold, so a real number should show.
     expect(result.withheld).toBe(false);
     expect(result.oddsPercent).not.toBeNull();
+    // ...but the band stays "early" until exam runs back it up. This used to
+    // assert 'solid' on coverage alone, which is exactly the flattery Doc 2
+    // B2 forbids - see certainty-band.util.ts.
+    expect(result.certaintyBand).toBe('early');
+  });
+
+  it('reaches a solid band once two exam runs back the coverage up', async () => {
+    const learnerId = randomUUID();
+
+    for (const itemId of itemIds) {
+      await schedulerService.gradeReview(learnerId, itemId, 'good', null);
+    }
+
+    for (let i = 0; i < 2; i += 1) {
+      await prisma.examRun.create({
+        data: {
+          learnerId,
+          qualificationId,
+          kind: 'SIMULATION',
+          status: 'SUBMITTED',
+          submittedAt: new Date(),
+          questionCount: 8,
+          allottedSeconds: 720,
+          correctCount: 8,
+          scoredCount: 8,
+          passed: true,
+          contentGraphVersion: 'seed-1',
+          passMarkSnapshot: passMark,
+        },
+      });
+    }
+
+    const result = await readinessService.computeReadiness(learnerId, qualificationId, passMark);
+
+    expect(result.certaintyBand).toBe('solid');
   });
 
   it('reports the qualification pass mark as a whole percentage', async () => {

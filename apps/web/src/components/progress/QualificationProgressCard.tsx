@@ -13,6 +13,25 @@ import { Badge } from '@/components/ui/Badge';
 const CERTAINTY_TONE = { early: 'neutral', fair: 'neutral', solid: 'success' } as const;
 
 /**
+ * The band is about how much evidence the odds rest on, so the label says
+ * that rather than printing the raw enum. "early" next to a high coverage
+ * figure otherwise reads as a demotion, when what it actually means is
+ * "nothing has tested this under exam conditions yet".
+ */
+const CERTAINTY_LABEL = {
+  early: 'Early read',
+  fair: 'Fairly confident',
+  solid: 'Solid',
+} as const;
+
+/** Names the fix, without the handover's banned "behind"/"overdue" framing. */
+const CERTAINTY_NEXT_STEP = {
+  early: 'Sit an exam simulation to firm this up.',
+  fair: 'One more exam simulation would make this solid.',
+  solid: null,
+} as const;
+
+/**
  * One qualification's progress summary. A separate component (rather than
  * inline in the Progress page's list) so each card can call its own hooks
  * for its own slug - hooks can't be called in a loop at the page level.
@@ -65,8 +84,13 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
             <>
               Odds of passing if you sat it soon: <strong>{readiness.data.oddsPercent}%</strong>{' '}
               <Badge tone={CERTAINTY_TONE[readiness.data.certaintyBand]}>
-                {readiness.data.certaintyBand}
+                {CERTAINTY_LABEL[readiness.data.certaintyBand]}
               </Badge>
+              {CERTAINTY_NEXT_STEP[readiness.data.certaintyBand] && (
+                <div style={{ color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
+                  {CERTAINTY_NEXT_STEP[readiness.data.certaintyBand]}
+                </div>
+              )}
             </>
           )}
           {readiness.data.forecast.expectedFinishDate && (

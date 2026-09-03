@@ -1,3 +1,4 @@
+import { READINESS_MIN_RUN_QUESTION_COUNT } from '@ogwi/shared';
 import { prisma } from '../../lib/prisma.js';
 
 /**
@@ -30,4 +31,36 @@ export async function findReviewCountsByDay(
   }
 
   return counts;
+}
+
+/**
+ * When this learner last sat exam-format runs, for the certainty band.
+ *
+ * Queried here rather than through the exam module so readiness stays a leaf -
+ * the same precedent as reading reviewEvent (scheduler's table) above.
+ *
+ * Only SIMULATION runs count: a learner-built CUSTOM test must never buy a
+ * confident band. Fetches the WIDER window once; the pure util does both
+ * counts.
+ */
+export async function findSubmittedExamRunDates(
+  learnerId: string,
+  qualificationId: string,
+  since: Date,
+): Promise<Date[]> {
+  const rows = await prisma.examRun.findMany({
+    where: {
+      learnerId,
+      qualificationId,
+      kind: 'SIMULATION',
+      status: 'SUBMITTED',
+      submittedAt: { gte: since },
+      questionCount: { gte: READINESS_MIN_RUN_QUESTION_COUNT },
+    },
+    select: { submittedAt: true },
+  });
+
+  return rows
+    .map((row) => row.submittedAt)
+    .filter((submittedAt): submittedAt is Date => submittedAt !== null);
 }

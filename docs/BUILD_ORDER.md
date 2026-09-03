@@ -128,9 +128,13 @@ nothing here blocks a merge.
       not researched). `GET /api/readiness/:qualificationSlug`. **Two deliberate deviations from
       the spec, both because no exam/mock system exists**: certainty bands (`early`/`fair`/
       `solid`) are computed from weighted coverage alone rather than also requiring exam-format
-      run evidence — gating on runs that can structurally never happen would leave the band
-      permanently stuck at `early`, making the field pointless; σ is a simple
-      coverage-only heuristic, not the spec's multi-factor formula. Verified live: odds correctly
+      run evidence. **That deviation is now closed** — step 12 built Exam Simulation, so
+      `certainty-band.util.ts` applies Doc 2 B2's full rule (solid = coverage ≥70% and ≥2 runs
+      in 30 days; fair = ≥40% and ≥1 in 45). Coverage alone can no longer buy a confident
+      band, which is a deliberate, user-visible regression for existing data. Still deviating:
+      σ is a simple coverage-only heuristic, not the spec's multi-factor formula, and μ has no
+      calibration term (`ratio = achieved / projection`) — exam runs now make that possible but
+      it is a separate piece of work. Verified live: odds correctly
       withheld at 0% coverage, rose to a real calibrated number once the qualification was fully
       covered, with a genuine forecast date computed from actual review-event history.
 - [~] **10. Conversational layer (Oggi)** — context frames, notes store, role contracts,
@@ -189,7 +193,51 @@ nothing here blocks a merge.
       malformed request (or any thrown `NotFoundError`, etc.) could take the API down. Fixed
       by importing `express-async-errors` at the top of `apps/api/src/app.ts`. Regression
       tests in `apps/api/src/__tests__/error-handling.test.ts`.
-- [ ] **12. Whatever guardrails end up wanted** — the original spec pushed for a CI-blocking
+- [~] **12. Exam Simulation (core run)** — `apps/api/src/modules/exam/`. A randomised paper sat
+      under exam conditions: `POST /api/exam/runs` generates it, `GET /api/exam/runs/:runId`
+      serves it, `POST .../answers` saves a selection blind, `POST .../submit` marks and
+      freezes it, `GET .../results` reveals the key. New `ExamRun`/`ExamRunItem` tables
+      (migration `exam_runs`), plus the `knowledge_items(objectiveId)` index that every
+      qualification-scoped query was missing.
+
+      **Paper generation was not specified anywhere** (Doc 2 A5 says only "a fresh randomised
+      paper each time"), so per Part D it was raised rather than invented: `paper-blueprint.util.ts`
+      apportions questions across modules by `blueprintWeight` using largest-remainder, caps
+      each module at its eligible content, redistributes any shortfall, and shuffles so position
+      doesn't telegraph the blueprint. Eligible = has a BASE rendering in a format the marker
+      supports. Target is 30 questions but the paper is capped by content — demo-cert yields 8 —
+      and `allottedSeconds` derives from the real size, not the target.
+
+      **Invariant 10 ("exam mode contains no aid machinery") is structural, not conditional**:
+      `examQuestionSchema` has no field that could carry correctness, saving an answer returns
+      only `{saved:true}`, and `components/exam/ExamOptions.tsx` is a separate component from
+      `MultipleChoiceOptions` precisely so no future edit can leak a key through a shared prop.
+
+      **Marking happens only at submit**, never at save. Three reasons: answers stay mutable, so
+      per-save marking would write several review events for one served item (invariant 4);
+      grading pumps the flight, so it would let a learner watch altitude tick up per question in
+      a second tab (Doc 2 C4 forbids publishing mid-activity); and response timing would leak.
+      Submit is two-phase — mark and freeze in the repo's first `$transaction`, then write engine
+      events claim-first so a crashed submit resumes instead of double-writing an append-only
+      log. One aggregate flight pump per paper, not one per question: `flightService.pump`
+      replays the whole flight history, so per-item would be quadratic. Litres stay per item.
+
+      **Unanswered questions score as wrong but write no review event.** FSRS grades a retrieval
+      attempt and a skipped question isn't one; invariant 6 says mastery falls only via a failed
+      previously-known item or time decay.
+
+      Frontend: `(exam)/exam/[runId]` and `.../results`, `components/exam/*`, and an Exam
+      Simulation entry on Practice. Results show score, pass/fail, time used, and Review Answers
+      with the source topic — and no attempt number, count or history, per invariant 12 (which
+      is also why attempt history stays deferred: a history list *is* an attempt counter).
+
+      **Not built**: the pausable timer, per-question flagging, the question-navigation panel,
+      pause/resume and jump-back-in, attempt history, mini-mock and first-mock-invitation kinds
+      (the invitation threshold is Open Decision #2 and undecided), and the economy's completion
+      premiums (+50L/+20L/+10L). `startedAt` is set at run creation, so "time used" inflates if
+      the learner leaves the tab before opening the paper — acceptable while the timer is
+      deferred.
+- [ ] **13. Whatever guardrails end up wanted** — the original spec pushed for a CI-blocking
       invariant suite and banned-vocabulary linter here; per the user's direction this pass
       keeps that reference-only. Revisit if/when enforcement actually becomes useful.
 

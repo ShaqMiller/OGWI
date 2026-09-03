@@ -264,6 +264,24 @@ model ReviewEvent {
   // checked at answer time.
   renderingId     String?
 
+  // Which option the learner actually picked. Deferred until something read
+  // it (see docs/BUILD_ORDER.md); the replay check below is that reader.
+  // Deliberately a narrow Int? rather than a Json blob, so free-text answers
+  // from future formats cannot silently land in an append-only table -
+  // invariant 11, "sensitive content is structurally unstorable".
+  selectedOptionIndex Int?
+
+  // Makes one learning act write one row, even if the request is retried.
+  // Format: <namespace>:<actId>[:<subsystem>], e.g.
+  //   review:<learnerId>:<attemptId>   (a practice answer)
+  //   exam-item:<examRunItemId>        (one question of an exam run)
+  // Learner-scoped on purpose: LitreEvent.idempotencyKey is globally unique,
+  // so a bare client-supplied uuid would let one learner burn another's key.
+  // Stays nullable permanently - tightening it later would mean backfilling
+  // append-only history, and there is exactly one write site so "new rows
+  // carry a key" is enforceable in code instead.
+  idempotencyKey String? @unique
+
   grade      ReviewGrade
   reviewedAt DateTime    @default(now())
 

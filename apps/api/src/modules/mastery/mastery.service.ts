@@ -84,8 +84,16 @@ export async function publishModuleMastery(
   if (!published || liveScore >= published.displayedScore) {
     displayedScore = liveScore;
   } else {
-    const elapsedDays =
-      (now.getTime() - published.lastPublishedAt.getTime()) / (1000 * 60 * 60 * 24);
+    // Clamped at 0 because the two timestamps can come from different clocks:
+    // `now` is the Node process's, while lastPublishedAt is Postgres's on the
+    // row's first write (@default(now())). When Postgres lands a hair ahead,
+    // elapsed goes negative, decay goes negative, and a *decline* nudges the
+    // displayed score up - the opposite of what easing is for. Tiny (~1e-9)
+    // but real, and it made this path's test flaky.
+    const elapsedDays = Math.max(
+      0,
+      (now.getTime() - published.lastPublishedAt.getTime()) / (1000 * 60 * 60 * 24),
+    );
     const decay = 1 - Math.pow(0.5, elapsedDays / PUBLISH_HALF_LIFE_DAYS);
     displayedScore = published.displayedScore + decay * (liveScore - published.displayedScore);
   }

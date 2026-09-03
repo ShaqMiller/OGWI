@@ -7,6 +7,7 @@ coverage/
 *.log
 .env
 .env.local
+.env.test
 .env.*.local
 .DS_Store
 *.tsbuildinfo
@@ -20,3 +21,6 @@ apps/api/prisma/migrations/.gitkeep-ignore
 .vscode/*
 !.vscode/extensions.json
 .idea/
+
+# Local dev server launch config (contains machine-specific absolute paths)
+.claude/launch.json

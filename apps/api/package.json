@@ -14,7 +14,8 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:studio": "prisma studio",
-    "db:seed": "tsx --env-file=.env prisma/seed.ts"
+    "db:seed": "tsx --env-file=.env prisma/seed.ts",
+    "db:test:setup": "node --env-file=.env.test ./node_modules/prisma/build/index.js migrate deploy && tsx --env-file=.env.test prisma/seed.ts"
   },
   "dependencies": {
     "@ogwi/shared": "workspace:*",

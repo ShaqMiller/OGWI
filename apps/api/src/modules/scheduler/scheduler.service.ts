@@ -1,4 +1,10 @@
-import { DESIRED_RETENTION, SCHEDULER_CONFIG_VERSION, type ReviewGradeInput } from '@ogwi/shared';
+import {
+  DESIRED_RETENTION,
+  SCHEDULER_CONFIG_VERSION,
+  type ReviewGradeInput,
+  type SubmitAnswerResponse,
+  type SubmittedAnswer,
+} from '@ogwi/shared';
 import * as contentGraphService from '../content-graph/content-graph.service.js';
 import * as economyService from '../economy/economy.service.js';
 import * as flightService from '../flight/flight.service.js';
@@ -9,6 +15,36 @@ import type { DueItem, GradedItemState } from './scheduler.types.js';
 /**
  * Business logic only. Never touches req/res, never imports Prisma types.
  */
+
+/**
+ * Marks a submitted answer and records the result. The only way a review is
+ * written from outside the API: gradeReview below takes a grade directly and
+ * is no longer reachable over HTTP, because accepting a client-supplied
+ * verdict let anyone forge mastery, litres, flight altitude and pass odds.
+ *
+ * checkAnswer runs FIRST and throws on a rendering mismatch or an
+ * inapplicable answer. That ordering is load-bearing: gradeReview performs
+ * several writes across four modules without a transaction, so anything that
+ * can reject has to reject before the first one.
+ */
+export async function submitAnswer(
+  learnerId: string,
+  knowledgeItemId: string,
+  renderingId: string,
+  answer: SubmittedAnswer,
+): Promise<SubmitAnswerResponse> {
+  const verdict = await contentGraphService.checkAnswer(knowledgeItemId, renderingId, answer);
+
+  const grade: ReviewGradeInput = verdict.correct ? 'good' : 'again';
+  const memoryState = await gradeReview(learnerId, knowledgeItemId, grade, renderingId);
+
+  return {
+    correct: verdict.correct,
+    grade,
+    correctOptionIndex: verdict.correctOptionIndex,
+    memoryState,
+  };
+}
 
 export async function gradeReview(
   learnerId: string,

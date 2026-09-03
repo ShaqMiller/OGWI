@@ -20,22 +20,49 @@ export type ObjectiveKind = z.infer<typeof objectiveKindSchema>;
 export const keyPointTierSchema = z.enum(['CRITICAL', 'SUPPORTING']);
 export type KeyPointTier = z.infer<typeof keyPointTierSchema>;
 
+// Matches the Prisma RenderingFormat/RenderingRole enums, for the same
+// reason keyPointTierSchema above was flipped: these were lowercase and
+// never round-tripped real data, so the mismatch stayed hidden behind
+// knowledgeItemPromptSchema's bare z.string() `format`. That bare string is
+// gone now that answer checking branches on format, so the casing has to
+// agree with what the database actually stores.
 export const renderingFormatSchema = z.enum([
-  'multiple_choice',
-  'multiple_response',
-  'true_false',
-  'typed_short_answer',
-  'ai_marked_long_answer',
-  'sequencing',
-  'matching',
-  'fill_in_the_blanks',
-  'sorting',
-  'pick_an_image',
+  'MULTIPLE_CHOICE',
+  'MULTIPLE_RESPONSE',
+  'TRUE_FALSE',
+  'TYPED_SHORT_ANSWER',
+  'AI_MARKED_LONG_ANSWER',
+  'SEQUENCING',
+  'MATCHING',
+  'FILL_IN_THE_BLANKS',
+  'SORTING',
+  'PICK_AN_IMAGE',
 ]);
 export type RenderingFormat = z.infer<typeof renderingFormatSchema>;
 
-export const renderingRoleSchema = z.enum(['base', 'variant', 'ladder']);
+export const renderingRoleSchema = z.enum(['BASE', 'VARIANT', 'LADDER']);
 export type RenderingRole = z.infer<typeof renderingRoleSchema>;
+
+/**
+ * The authored-content contract for a MULTIPLE_CHOICE rendering's `content`
+ * JSON. Rendering.content is an untyped Json column, so this is the only
+ * thing standing between an authoring mistake and a broken question.
+ *
+ * `correctOptionIndex` is validated *against* `options` rather than being
+ * merely an integer: an out-of-range key (or the -1 this used to silently
+ * default to) is a defect, not a question with no right answer.
+ */
+export const multipleChoiceContentSchema = z
+  .object({
+    prompt: z.string().min(1),
+    options: z.array(z.string().min(1)).min(2),
+    correctOptionIndex: z.number().int().nonnegative(),
+  })
+  .refine((content) => content.correctOptionIndex < content.options.length, {
+    message: 'correctOptionIndex is out of range for options',
+    path: ['correctOptionIndex'],
+  });
+export type MultipleChoiceContent = z.infer<typeof multipleChoiceContentSchema>;
 
 export const qualificationSchema = z.object({
   id: z.string().uuid(),
@@ -106,13 +133,21 @@ export type Rendering = z.infer<typeof renderingSchema>;
  * The display shape for a knowledge item's BASE rendering (GET
  * /api/content-graph/knowledge-items/:id). Assumes multiple-choice, same
  * simplification as the endpoint itself - broaden once other formats exist.
+ *
+ * Deliberately carries NO correct answer. This endpoint is unauthenticated
+ * ("browsing is pre-auth", see content-graph.routes.ts), so shipping the key
+ * here made it publicly readable for any item id. The key is now revealed
+ * only by POST /api/scheduler/answers, in the response to a committed
+ * answer. `renderingId` is what the learner answers against, and it is
+ * echoed back on submission so the server can verify and log which rendering
+ * was actually served.
  */
 export const knowledgeItemPromptSchema = z.object({
   knowledgeItemId: z.string().uuid(),
-  format: z.string(),
+  renderingId: z.string().uuid(),
+  format: renderingFormatSchema,
   prompt: z.string(),
   options: z.array(z.string()),
-  correctOptionIndex: z.number().int(),
 });
 export type KnowledgeItemPrompt = z.infer<typeof knowledgeItemPromptSchema>;
 

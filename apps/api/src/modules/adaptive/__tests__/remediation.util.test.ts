@@ -47,7 +47,7 @@ describe('deriveRemediationState', () => {
     expect(deriveRemediationState(events).inRemediation).toBe(true);
   });
 
-  it('requires distinct renderings when both are known', () => {
+  it('requires distinct renderings when the item has more than one', () => {
     const events = [
       { grade: 'AGAIN' as const, reviewedAt: day(1), renderingId: null },
       { grade: 'GOOD' as const, reviewedAt: day(2), renderingId: 'r1' },
@@ -55,9 +55,33 @@ describe('deriveRemediationState', () => {
       { grade: 'GOOD' as const, reviewedAt: day(4), renderingId: 'r2' },
     ];
 
-    const state = deriveRemediationState(events);
+    const state = deriveRemediationState(events, { enforceRenderingDistinctness: true });
     expect(state.inRemediation).toBe(false);
+    // day(3) is skipped as a repeat of r1; r2 on day(4) is what exits it.
     expect(state.exitedAt).toEqual(day(4));
+  });
+
+  /**
+   * Regression for the deadlock this option exists to prevent. Every item in
+   * the content graph currently has exactly one BASE rendering, so once
+   * answers started recording which rendering was served, both qualifying
+   * Goods necessarily carried the same id. With distinctness enforced
+   * unconditionally the second is skipped forever, the item never leaves
+   * remediation, and Practice's "Fixing gaps" grows without bound.
+   *
+   * Re-enable enforcement by authoring rendering variants, not by deleting
+   * this test.
+   */
+  it('exits on two Goods on different days when the item has only one rendering', () => {
+    const events = [
+      { grade: 'AGAIN' as const, reviewedAt: day(1), renderingId: 'only-rendering' },
+      { grade: 'GOOD' as const, reviewedAt: day(2), renderingId: 'only-rendering' },
+      { grade: 'GOOD' as const, reviewedAt: day(3), renderingId: 'only-rendering' },
+    ];
+
+    const state = deriveRemediationState(events, { enforceRenderingDistinctness: false });
+    expect(state.inRemediation).toBe(false);
+    expect(state.exitedAt).toEqual(day(3));
   });
 
   it('a later Again resets progress even after partial remediation success', () => {

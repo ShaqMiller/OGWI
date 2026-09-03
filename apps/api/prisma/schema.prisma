@@ -249,6 +249,14 @@ model ReviewEvent {
   id              String  @id @default(uuid())
   learnerId       String
   knowledgeItemId String
+  // Deliberately a bare id with no FK to Rendering. An optional relation
+  // would default to SetNull, which mutates a row in an append-only table;
+  // Restrict would instead block deleting a KnowledgeItem (whose renderings
+  // cascade) once anyone had answered it. This is a denormalised pointer
+  // that must outlive content edits. Ownership - that the rendering really
+  // belonged to knowledgeItemId - is enforced on the write path in
+  // content-graph.service.checkAnswer, which is where it can actually be
+  // checked at answer time.
   renderingId     String?
 
   grade      ReviewGrade

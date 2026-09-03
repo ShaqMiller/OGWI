@@ -6,6 +6,7 @@ import {
   type GapQueueModule,
   type RemediationItem,
 } from '@ogwi/shared';
+import * as contentGraphService from '../content-graph/content-graph.service.js';
 import * as adaptiveRepository from './adaptive.repository.js';
 import { deriveRemediationState } from './remediation.util.js';
 import type { ItemRemediationRow } from './adaptive.types.js';
@@ -32,9 +33,19 @@ async function getRemediationRows(
     byItem.set(event.knowledgeItemId, group);
   }
 
+  // The spec's "two different renderings" exit rule only makes sense for an
+  // item that has more than one rendering to serve; on single-rendering
+  // content it would block exit permanently. One grouped query for the whole
+  // set, not one per item. See remediation.util.ts for the full reasoning.
+  const renderingCounts = await contentGraphService.countRenderingsByItem(
+    Array.from(byItem.keys()),
+  );
+
   const rows: ItemRemediationRow[] = [];
   for (const [knowledgeItemId, itemEvents] of byItem) {
-    const state = deriveRemediationState(itemEvents);
+    const state = deriveRemediationState(itemEvents, {
+      enforceRenderingDistinctness: (renderingCounts.get(knowledgeItemId) ?? 0) > 1,
+    });
     if (state.enteredAt === null) continue; // never entered remediation - nothing to report
 
     const first = itemEvents[0]!;

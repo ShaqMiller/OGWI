@@ -3,6 +3,12 @@
  * (the qualification dashboard's composition-driven flow, Practice's
  * fixed-queue flow). Presentational only - selection/grading logic lives
  * in whichever component uses this.
+ *
+ * Two-stage feedback, because marking is now a server round-trip: tapping
+ * an option locks the list and marks that option pending immediately, then
+ * `correctOptionIndex` arrives with the response and the colours resolve.
+ * A null `correctOptionIndex` means "not marked yet" - the answer key is
+ * never known to this component before the learner has committed.
  */
 export function MultipleChoiceOptions({
   options,
@@ -11,28 +17,33 @@ export function MultipleChoiceOptions({
   onSelect,
 }: {
   options: string[];
-  correctOptionIndex: number;
+  correctOptionIndex: number | null;
   selectedOption: number | null;
   onSelect: (index: number) => void;
 }) {
+  const marked = correctOptionIndex !== null;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       {options.map((option, index) => {
         const isSelected = selectedOption === index;
         const isCorrectAnswer = index === correctOptionIndex;
-        const showResult = selectedOption !== null;
 
         let background = 'var(--color-bg-elevated)';
         let borderColor = 'var(--color-border)';
         let color = 'var(--color-text)';
-        if (showResult && isCorrectAnswer) {
+        if (marked && isCorrectAnswer) {
           background = 'var(--color-success-bg)';
           borderColor = 'var(--color-success)';
           color = 'var(--color-success)';
-        } else if (showResult && isSelected) {
+        } else if (marked && isSelected) {
           background = 'var(--color-danger-bg)';
           borderColor = 'var(--color-danger)';
           color = 'var(--color-danger)';
+        } else if (isSelected) {
+          // Awaiting the server's verdict - acknowledge the tap without
+          // claiming a result.
+          borderColor = 'var(--color-text-muted)';
         }
 
         return (
@@ -50,6 +61,7 @@ export function MultipleChoiceOptions({
               borderRadius: 'var(--radius)',
               cursor: selectedOption === null ? 'pointer' : 'default',
               fontSize: '0.95rem',
+              opacity: isSelected && !marked ? 0.7 : 1,
             }}
           >
             {option}

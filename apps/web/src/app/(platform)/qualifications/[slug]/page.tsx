@@ -7,7 +7,7 @@ import { useKnowledgeItemPrompt } from '@/hooks/content-graph/useKnowledgeItemPr
 import { useMastery } from '@/hooks/mastery/useMastery';
 import { useNextSession } from '@/hooks/composition/useNextSession';
 import { useEconomyBalance } from '@/hooks/economy/useEconomyBalance';
-import { useGradeReview } from '@/hooks/scheduler/useGradeReview';
+import { useSubmitAnswer } from '@/hooks/scheduler/useSubmitAnswer';
 import { useTopicKeyPoints } from '@/hooks/recall/useTopicKeyPoints';
 import { ModuleMasteryBar } from '@/components/mastery/ModuleMasteryBar';
 import { MultipleChoiceOptions } from '@/components/quiz/MultipleChoiceOptions';
@@ -21,10 +21,10 @@ import { Button } from '@/components/ui/Button';
  * clickable, not just curl-able. Every number here is live from the API -
  * nothing is mocked in this component.
  *
- * There is no real answer-checking system yet (Doc 2's quiz UI doesn't
- * exist), so this checks the multiple-choice answer client-side against
- * the rendering's correctOptionIndex and grades good/again accordingly -
- * a reasonable stand-in, not the final design.
+ * Answers are marked server-side (POST /api/scheduler/answers): this sends
+ * the chosen option and the rendering it was shown for, and the response
+ * carries both the verdict and the correct option. The browser never sees
+ * an answer key before the learner has committed to one.
  */
 export default function QualificationDashboardPage({ params }: { params: { slug: string } }) {
   const { slug } = params;
@@ -33,11 +33,15 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
   const mastery = useMastery(slug);
   const nextSession = useNextSession(slug);
   const balance = useEconomyBalance(slug);
-  const gradeReview = useGradeReview(slug);
+  const submitAnswer = useSubmitAnswer(slug);
   const currentTopicId = nextSession.data?.currentTopic?.topicId ?? null;
   const topicKeyPoints = useTopicKeyPoints(currentTopicId);
 
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  // Tagged with the item it belongs to. onSuccess invalidates composition,
+  // so the next item can arrive while feedback is still showing - untagged,
+  // one question's answer key would get painted onto a different question.
+  const [marked, setMarked] = useState<{ itemId: string; correctOptionIndex: number } | null>(null);
 
   const currentItem = nextSession.data?.topicQuizItems[0] ?? null;
   const prompt = useKnowledgeItemPrompt(currentItem?.knowledgeItemId ?? null);
@@ -45,14 +49,32 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
   function selectOption(index: number) {
     if (selectedOption !== null || !prompt.data || !currentItem) return;
 
+    const answeredItemId = currentItem.knowledgeItemId;
     setSelectedOption(index);
-    const isCorrect = index === prompt.data.correctOptionIndex;
 
-    gradeReview.mutate(
-      { knowledgeItemId: currentItem.knowledgeItemId, grade: isCorrect ? 'good' : 'again' },
-      { onSuccess: () => setTimeout(() => setSelectedOption(null), 900) },
+    submitAnswer.mutate(
+      {
+        knowledgeItemId: answeredItemId,
+        renderingId: prompt.data.renderingId,
+        answer: { kind: 'option_index', selectedOptionIndex: index },
+      },
+      {
+        onSuccess: (result) => {
+          setMarked({ itemId: answeredItemId, correctOptionIndex: result.correctOptionIndex });
+          setTimeout(() => {
+            setSelectedOption(null);
+            setMarked(null);
+          }, 900);
+        },
+        // Unlock so the learner can retry rather than being stranded on a
+        // locked, unmarked question.
+        onError: () => setSelectedOption(null),
+      },
     );
   }
+
+  const markedForCurrentItem =
+    marked && marked.itemId === currentItem?.knowledgeItemId ? marked.correctOptionIndex : null;
 
   return (
     <div style={{ maxWidth: 640 }}>
@@ -107,11 +129,17 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
             <p>{prompt.data.prompt}</p>
             <MultipleChoiceOptions
               options={prompt.data.options}
-              correctOptionIndex={prompt.data.correctOptionIndex}
+              correctOptionIndex={markedForCurrentItem}
               selectedOption={selectedOption}
               onSelect={selectOption}
             />
           </div>
+        )}
+
+        {submitAnswer.isError && (
+          <p style={{ color: 'var(--color-danger)', fontSize: '0.85rem' }}>
+            Couldn&apos;t save that answer. Give it another go.
+          </p>
         )}
 
         {currentItem && !prompt.data && <p>Loading question...</p>}

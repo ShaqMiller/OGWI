@@ -7,13 +7,22 @@ import type { DerivedRemediationState, ReviewLite } from './adaptive.types.js';
  * append-only philosophy already used for the flight log (Doc 2 invariant
  * 2: "ordinary reads append nothing").
  *
- * Rule (Doc 2 B3, trimmed to what's buildable without answer-format-aware
- * quiz-taking, which doesn't exist yet): any Again enters remediation and
- * resets progress. Two Good answers on two different calendar days exit it
- * - and, when the caller supplied a renderingId on both (grading always
- * accepts one optionally), those two renderings must differ too. If either
- * side didn't supply a renderingId, that half of the check is skipped
- * rather than blocking exit forever on missing data.
+ * Rule (Doc 2 B3): any Again enters remediation and resets progress. Two
+ * Good answers on two different calendar days exit it - and, per the spec,
+ * "two correct answers, on two different renderings, on two different days".
+ *
+ * That distinctness requirement assumes the spec's content model, where
+ * "each item owns multiple renderings (base question, >=2 variants,
+ * format-ladder versions)". The point is that re-recognising the exact same
+ * wording twice isn't proof you know the fact.
+ *
+ * Our content doesn't have variants yet - every item has exactly one BASE
+ * rendering. Enforcing distinctness against single-rendering content is
+ * unsatisfiable: both Goods necessarily carry the same renderingId, the
+ * second is rejected, `qualifying` never reaches two, and the item stays in
+ * remediation forever. So the caller passes `enforceRenderingDistinctness`,
+ * set from the item's actual rendering count, and the rule switches itself
+ * on once variants are authored. See adaptive.service.getRemediationRows.
  *
  * Calendar day is computed in UTC here as a scaffold simplification - the
  * spec's day-counting rules (local calendar day) belong with real
@@ -21,7 +30,10 @@ import type { DerivedRemediationState, ReviewLite } from './adaptive.types.js';
  *
  * `events` must be sorted ascending by reviewedAt.
  */
-export function deriveRemediationState(events: ReviewLite[]): DerivedRemediationState {
+export function deriveRemediationState(
+  events: ReviewLite[],
+  options: { enforceRenderingDistinctness: boolean } = { enforceRenderingDistinctness: false },
+): DerivedRemediationState {
   let enteredAt: Date | null = null;
   let exitedAt: Date | null = null;
   let qualifying: { renderingId: string | null; day: string }[] = [];
@@ -43,6 +55,7 @@ export function deriveRemediationState(events: ReviewLite[]): DerivedRemediation
     if (sameDayAlready) continue;
 
     const renderingConflict =
+      options.enforceRenderingDistinctness &&
       event.renderingId !== null &&
       qualifying.some((q) => q.renderingId !== null && q.renderingId === event.renderingId);
     if (renderingConflict) continue;

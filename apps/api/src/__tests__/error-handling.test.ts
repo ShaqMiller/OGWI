@@ -14,9 +14,13 @@ describe('errors from async route handlers reach the error middleware', () => {
     const app = createApp();
 
     const res = await request(app)
-      .post('/api/scheduler/reviews')
+      .post('/api/scheduler/answers')
       .set('x-dev-learner-id', 'error-handling-test')
-      .send({ knowledgeItemId: 'not-a-uuid', grade: 'good' });
+      .send({
+        knowledgeItemId: 'not-a-uuid',
+        renderingId: 'also-not-a-uuid',
+        answer: { kind: 'option_index', selectedOptionIndex: 0 },
+      });
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_ERROR');

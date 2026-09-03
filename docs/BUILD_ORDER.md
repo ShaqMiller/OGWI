@@ -35,10 +35,18 @@ nothing here blocks a merge.
       in remediation, plus items that exited within the last 30 days) and `GET
       /api/adaptive/gap-queue` (per-module "Fixing gaps" readiness: ≥5 items in remediation or
       the oldest signal >7 days old, whichever first). **Simplified from the spec**: no
-      rendering-format ladder (typed → cued → multiple-choice) — that needs answer-checking
-      against a served rendering, which doesn't exist yet since there's no real quiz-taking UI;
-      grades are still supplied directly by the caller, same as the scheduler. Calendar days
+      rendering-format ladder (typed → cued → multiple-choice) — that needs authored rendering
+      variants, which don't exist yet (every item has exactly one BASE rendering). Server-side
+      answer-checking, the other prerequisite, now exists — see the note below. Calendar days
       are computed in UTC, not the learner's local timezone.
+
+      **Remediation's "two different renderings" exit rule is now conditional.** Doc 2 B3 wants
+      two corrects on two different renderings, which presumes its content model ("each item
+      owns multiple renderings"). Once answers began recording which rendering was served,
+      enforcing that against single-rendering content became unsatisfiable — both corrects carry
+      the same id, so the item could never exit and "Fixing gaps" would grow without bound.
+      `deriveRemediationState` now takes `enforceRenderingDistinctness`, set per item from its
+      actual rendering count, so the rule re-activates by itself once variants are authored.
 - [x] **5. Session/flow composition** — `apps/api/src/modules/composition/`: `GET
       /api/composition/next?qualificationSlug=...` composes the opener (reuses the scheduler's
       `getDueItems`), the "current topic" (first topic in module/topic order that isn't
@@ -153,8 +161,23 @@ nothing here blocks a merge.
         (step 6) - Blurt and Teach Oggi, entry buttons on the qualification dashboard's "Next
         up" card, shown only for topics with seeded key points. `app/(platform)/oggi/page.tsx`
         (step 10) - the canned-reply Oggi chat shell, a 5th nav link.
-      - Answer-checking everywhere is done client-side against the rendering's
-        `correctOptionIndex`, since there's no server-side answer-checking system yet.
+      - **Answer-checking is server-side** (`POST /api/scheduler/answers`). The client submits
+        the chosen option plus the `renderingId` it was shown; the API resolves the rendering,
+        marks it, derives the grade and returns the verdict with the correct option. The prompt
+        endpoint no longer returns `correctOptionIndex` at all — it is unauthenticated, so
+        shipping the key there made every answer publicly readable, and the old
+        `POST /api/scheduler/reviews` let any caller forge mastery, litres, altitude and pass
+        odds by posting `grade: "good"`. That route is removed, not deprecated.
+        **Not built**: replay protection. Nothing stops re-submitting the same answer; after the
+        first correct one it pays `POINTS_NOT_DUE_CORRECT` (1) each time, with no cap — the same
+        exposure the old route had. The real fix is a request-scoped idempotency key, which
+        needs a unique index and should be designed together with the existing gap in
+        `economy.repository.ts` (where `idempotencyKey: randomUUID()` satisfies the constraint
+        without providing idempotency). This change enables it by producing a stable
+        `(learnerId, knowledgeItemId, renderingId)` tuple.
+        **Not stored**: which option the learner actually picked. `ReviewEvent` records the
+        grade, not the response. Add a narrow `selectedOptionIndex Int?` (never a `Json` blob —
+        invariant 11) when something reads it, e.g. a distractor-analysis report.
       - A small set of reusable primitives (`components/ui/{Card,Button,Badge,ProgressBar}.tsx`)
         and CSS custom properties (`globals.css`) give every page a consistent look - still
         explicitly a placeholder to prove the backend works end to end, not a design; it will be

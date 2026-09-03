@@ -1,3 +1,4 @@
+import type { KnowledgeItemPrompt, RenderingFormat } from '@ogwi/shared';
 import type { Module as PrismaModule, Qualification as PrismaQualification } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import type { QualificationWithModules } from './content-graph.types.js';
@@ -52,41 +53,91 @@ export async function listQualifications(): Promise<QualificationWithModules[]> 
   return rows.map(toDomainQualification);
 }
 
-export interface KnowledgeItemPrompt {
-  knowledgeItemId: string;
-  format: string;
-  prompt: string;
-  options: string[];
-  correctOptionIndex: number;
-}
-
 /**
- * Reads the BASE rendering's content for display. Seed content is always
- * MULTIPLE_CHOICE right now, so this assumes that shape rather than
- * branching on format - broaden this once other formats exist.
+ * Reads the BASE rendering for display. Deliberately returns no correct
+ * answer - see knowledgeItemPromptSchema in packages/shared for why.
+ *
+ * The `?? ''` / `?? []` defaults this used to apply are gone: malformed
+ * content is now surfaced by the answer checker rather than papered over
+ * into an unanswerable question. Display still tolerates a missing prompt
+ * or options (you get an empty question, not a crash); grading does not.
+ *
+ * `orderBy` matters even though every item currently has exactly one BASE
+ * rendering: without it, a second BASE would make this return an arbitrary
+ * row per call, and the learner could be graded against a rendering other
+ * than the one they were shown.
  */
 export async function findKnowledgeItemPrompt(
   knowledgeItemId: string,
 ): Promise<KnowledgeItemPrompt | null> {
   const rendering = await prisma.rendering.findFirst({
     where: { knowledgeItemId, role: 'BASE' },
+    orderBy: { createdAt: 'asc' },
   });
 
   if (!rendering) return null;
 
-  const content = rendering.content as {
-    prompt?: string;
-    options?: string[];
-    correctOptionIndex?: number;
-  };
+  const content = rendering.content as { prompt?: string; options?: string[] };
 
   return {
     knowledgeItemId,
+    renderingId: rendering.id,
     format: rendering.format,
     prompt: content.prompt ?? '',
     options: content.options ?? [],
-    correctOptionIndex: content.correctOptionIndex ?? -1,
   };
+}
+
+export interface GradableRendering {
+  renderingId: string;
+  format: RenderingFormat;
+  content: unknown;
+}
+
+/**
+ * Loads the rendering a learner claims to have answered.
+ *
+ * Both ids are scoped in the `where` clause rather than compared afterwards,
+ * so a caller cannot forget the ownership check: passing a renderingId that
+ * belongs to a different knowledge item simply finds nothing. That also
+ * means "no such rendering" and "not yours" are indistinguishable to the
+ * client, which is intentional - no enumeration oracle.
+ */
+export async function findGradableRendering(
+  knowledgeItemId: string,
+  renderingId: string,
+): Promise<GradableRendering | null> {
+  const rendering = await prisma.rendering.findFirst({
+    where: { id: renderingId, knowledgeItemId },
+  });
+
+  if (!rendering) return null;
+
+  return {
+    renderingId: rendering.id,
+    format: rendering.format,
+    content: rendering.content,
+  };
+}
+
+/**
+ * How many renderings each of these items has. Used by the adaptive engine
+ * to decide whether the "two different renderings" remediation exit rule can
+ * apply at all - enforcing it on a single-rendering item would make exit
+ * impossible. One grouped query, not one per item.
+ */
+export async function countRenderingsByItem(
+  knowledgeItemIds: string[],
+): Promise<Map<string, number>> {
+  if (knowledgeItemIds.length === 0) return new Map();
+
+  const rows = await prisma.rendering.groupBy({
+    by: ['knowledgeItemId'],
+    where: { knowledgeItemId: { in: knowledgeItemIds } },
+    _count: { _all: true },
+  });
+
+  return new Map(rows.map((row) => [row.knowledgeItemId, row._count._all]));
 }
 
 /** Cheap join used by other modules (scheduler -> flight) to resolve which qualification a graded item belongs to. */

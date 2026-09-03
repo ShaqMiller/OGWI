@@ -9,7 +9,14 @@ import {
 } from '@ogwi/shared';
 import { NotFoundError, ValidationError } from '../../errors/index.js';
 import * as contentGraphService from '../content-graph/content-graph.service.js';
-import { examItemActKey, pumpKey } from '../scheduler/idempotency.util.js';
+import * as economyService from '../economy/economy.service.js';
+import * as flightService from '../flight/flight.service.js';
+import {
+  examItemActKey,
+  examRunPremiumKey,
+  litreKey,
+  pumpKey,
+} from '../scheduler/idempotency.util.js';
 import * as schedulerService from '../scheduler/scheduler.service.js';
 import * as examRepository from './exam.repository.js';
 import { allocatePaper, buildPaperOrder } from './paper-blueprint.util.js';
@@ -181,8 +188,44 @@ export async function submitRun(runId: string, learnerId: string): Promise<ExamR
   }
 
   await writeEngineEvents(runId, learnerId);
+  await awardCompletionPremium(runId, learnerId);
 
   return getResults(runId, learnerId);
+}
+
+/**
+ * Pays the run's completion premium (Doc 2 B8), once.
+ *
+ * Runs after the per-question grading so the premium is genuinely "on
+ * completion", and keyed on the run so a resumed or retried submit cannot pay
+ * it twice - unlike the per-question keys, which are per batch.
+ *
+ * The premium pumps the flight too: litres and fill are the same currency, and
+ * this is the payment that makes a mock the biggest climb in the product.
+ */
+async function awardCompletionPremium(runId: string, learnerId: string): Promise<void> {
+  const run = await loadRun(runId, learnerId);
+
+  const amount = economyService.priceExamPremium({
+    kind: run.kind,
+    answeredCount: run.items.filter((item) => item.selectedOptionIndex !== null).length,
+    questionCount: run.items.length,
+  });
+
+  const paid = await economyService.awardExamPremium({
+    learnerId,
+    amount,
+    idempotencyKey: examRunPremiumKey(runId),
+  });
+
+  if (paid) {
+    await flightService.pump(
+      learnerId,
+      run.qualificationId,
+      amount,
+      pumpKey(examRunPremiumKey(runId)),
+    );
+  }
 }
 
 async function markAndFreeze(run: ExamRunRow): Promise<void> {
@@ -323,6 +366,14 @@ export async function getResults(runId: string, learnerId: string): Promise<Exam
   const correctCount = run.correctCount ?? 0;
   const submittedAt = run.submittedAt ?? new Date();
 
+  // Read what this run actually paid rather than recomputing it: per-question
+  // pricing depends on the memory state at the moment of each answer, which
+  // can't be reconstructed after the fact.
+  const litresEarned = await economyService.sumLitresForKeys([
+    ...run.items.map((item) => litreKey(examItemActKey(item.id))),
+    examRunPremiumKey(run.id),
+  ]);
+
   return {
     runId: run.id,
     qualificationSlug: run.qualificationSlug,
@@ -338,6 +389,7 @@ export async function getResults(runId: string, learnerId: string): Promise<Exam
       0,
       Math.round((submittedAt.getTime() - run.startedAt.getTime()) / 1000),
     ),
+    litresEarned,
     questions,
   };
 }

@@ -43,3 +43,12 @@ export function litreKey(actKey: string): string {
 export function pumpKey(actKey: string): string {
   return `${actKey}:pump`;
 }
+
+/**
+ * The completion premium for a whole run. Keyed on the RUN, not a batch:
+ * unlike the per-question grading, the premium is paid once for the finished
+ * paper however many times submit is retried or resumed.
+ */
+export function examRunPremiumKey(examRunId: string): string {
+  return `exam-run:${examRunId}:premium`;
+}

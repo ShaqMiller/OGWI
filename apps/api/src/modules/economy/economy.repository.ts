@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 
 /**
@@ -67,4 +68,60 @@ export async function findRecentEvents(
     take: limit,
     select: { amount: true, source: true, knowledgeItemId: true, effectiveAt: true },
   });
+}
+
+/**
+ * Writes a run's completion premium.
+ *
+ * `source: 'ASSESSMENT'` with a null knowledgeItemId, because the premium is
+ * paid for finishing a RUN, not for any one question - attributing it to a
+ * question would misreport what earned it in the Recent list. Doc 2 B8 calls
+ * litre events "source-itemised", and this is the honest itemisation.
+ *
+ * Returns false when the premium was already paid: the unique idempotency key
+ * makes a resubmitted run a no-op rather than a double payment.
+ */
+export async function recordExamPremium(params: {
+  learnerId: string;
+  amount: number;
+  idempotencyKey: string;
+  litreConfigVersion: string;
+}): Promise<boolean> {
+  try {
+    await prisma.litreEvent.create({
+      data: {
+        learnerId: params.learnerId,
+        knowledgeItemId: null,
+        source: 'ASSESSMENT',
+        amount: params.amount,
+        litreConfigVersion: params.litreConfigVersion,
+        effectiveAt: new Date(),
+        idempotencyKey: params.idempotencyKey,
+      },
+    });
+    return true;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * What a specific set of learning acts paid, by their idempotency keys.
+ *
+ * Reads what was actually written rather than recomputing it - per-question
+ * pricing depends on the memory state at the moment of the answer, which
+ * cannot be reconstructed afterwards.
+ */
+export async function sumAmountsForKeys(idempotencyKeys: string[]): Promise<number> {
+  if (idempotencyKeys.length === 0) return 0;
+
+  const result = await prisma.litreEvent.aggregate({
+    where: { idempotencyKey: { in: idempotencyKeys } },
+    _sum: { amount: true },
+  });
+
+  return result._sum.amount ?? 0;
 }

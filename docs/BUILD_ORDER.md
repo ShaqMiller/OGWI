@@ -232,12 +232,20 @@ nothing here blocks a merge.
       with the source topic — and no attempt number, count or history, per invariant 12 (which
       is also why attempt history stays deferred: a history list *is* an attempt counter).
 
+      **Completion premiums are paid** (Doc 2 B8): +50L for an Exam Simulation, gated on ≥70% of
+      questions being answered, written as a single `ASSESSMENT` litre event with a null
+      `knowledgeItemId` — the premium is earned by finishing a run, not by any one question.
+      Keyed `exam-run:<runId>:premium`, so a resumed or retried submit cannot pay it twice, and it
+      pumps the flight like any other litres. The `MINI_MOCK` (+20L) and `CUSTOM` (+10L) rates are
+      priced and unit-tested but unreachable until those run kinds exist. Below the gate the
+      per-question litres are still paid — only the completion bonus is withheld. A full 8-question
+      demo run pays 90L (8×5 + 50); the spec's ~150–200L assumes a 30-question paper.
+
       **Not built**: the pausable timer, per-question flagging, the question-navigation panel,
-      pause/resume and jump-back-in, attempt history, mini-mock and first-mock-invitation kinds
-      (the invitation threshold is Open Decision #2 and undecided), and the economy's completion
-      premiums (+50L/+20L/+10L). `startedAt` is set at run creation, so "time used" inflates if
-      the learner leaves the tab before opening the paper — acceptable while the timer is
-      deferred.
+      pause/resume and jump-back-in, attempt history, and the mini-mock and first-mock-invitation
+      kinds (the invitation threshold is Open Decision #2 and undecided). `startedAt` is set at run
+      creation, so "time used" inflates if the learner leaves the tab before opening the paper —
+      acceptable while the timer is deferred.
 - [ ] **13. Whatever guardrails end up wanted** — the original spec pushed for a CI-blocking
       invariant suite and banned-vocabulary linter here; per the user's direction this pass
       keeps that reference-only. Revisit if/when enforcement actually becomes useful.

@@ -103,6 +103,12 @@ export const examResultsSchema = z.object({
   allottedSeconds: z.number().int().positive(),
   /** Honest even when it exceeds the allotment; there is no penalty. */
   secondsUsed: z.number().int().nonnegative(),
+  /**
+   * What the run actually paid: the per-question litres plus the completion
+   * premium. Doc 2 B8 has exam litres "accrue silently and pay at the feedback
+   * screen", so this is the first moment the learner sees them.
+   */
+  litresEarned: z.number().int().nonnegative(),
   questions: z.array(examResultQuestionSchema),
 });
 export type ExamResults = z.infer<typeof examResultsSchema>;

@@ -118,6 +118,7 @@ export async function findRun(runId: string, learnerId: string): Promise<ExamRun
     qualificationId: run.qualificationId,
     qualificationSlug: run.qualification.slug,
     qualificationName: run.qualification.name,
+    kind: run.kind,
     status: run.status,
     questionCount: run.questionCount,
     allottedSeconds: run.allottedSeconds,

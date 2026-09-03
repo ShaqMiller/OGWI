@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { EXAM_SECONDS_PER_QUESTION } from '@ogwi/shared';
+import {
+  EXAM_SECONDS_PER_QUESTION,
+  POINTS_FIRST_CORRECT,
+  PREMIUM_EXAM_SIMULATION,
+} from '@ogwi/shared';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../../app.js';
@@ -262,6 +266,52 @@ describe('submitting a run', () => {
 
     expect([a.status, b.status]).toEqual([200, 200]);
     expect(await prisma.reviewEvent.count({ where: { learnerId } })).toBe(4);
+  });
+
+  it('pays the completion premium on a finished paper', async () => {
+    const learnerId = randomUUID();
+    const run = await sitPartially(learnerId, DEMO_CERT_ITEM_COUNT, 0);
+
+    await submit(learnerId, run.runId);
+
+    const litres = await prisma.litreEvent.findMany({ where: { learnerId } });
+    const total = litres.reduce((sum, e) => sum + e.amount, 0);
+
+    // Doc 2 B8: the premium is what makes a mock the largest single payment in
+    // the product - per-question litres alone would be a fraction of it.
+    expect(total).toBe(DEMO_CERT_ITEM_COUNT * POINTS_FIRST_CORRECT + PREMIUM_EXAM_SIMULATION);
+
+    const premium = litres.find((e) => e.source === 'ASSESSMENT');
+    expect(premium?.amount).toBe(PREMIUM_EXAM_SIMULATION);
+    // Paid for the RUN, not for any one question.
+    expect(premium?.knowledgeItemId).toBeNull();
+  });
+
+  it('withholds the premium when too little of the paper was answered', async () => {
+    const learnerId = randomUUID();
+    // 5 of 8 is 62.5%, under the 70% gate.
+    const run = await sitPartially(learnerId, 5, 0);
+
+    await submit(learnerId, run.runId);
+
+    const litres = await prisma.litreEvent.findMany({ where: { learnerId } });
+    // The answered questions still pay; only the completion bonus is withheld.
+    expect(litres.reduce((sum, e) => sum + e.amount, 0)).toBe(5 * POINTS_FIRST_CORRECT);
+    expect(litres.some((e) => e.source === 'ASSESSMENT')).toBe(false);
+  });
+
+  it('pays the premium once however many times the run is submitted', async () => {
+    const learnerId = randomUUID();
+    const run = await sitPartially(learnerId, DEMO_CERT_ITEM_COUNT, 0);
+
+    await submit(learnerId, run.runId);
+    await submit(learnerId, run.runId);
+    await submit(learnerId, run.runId);
+
+    const premiums = await prisma.litreEvent.findMany({
+      where: { learnerId, source: 'ASSESSMENT' },
+    });
+    expect(premiums).toHaveLength(1);
   });
 
   it('records derived idempotency keys, not random ones', async () => {

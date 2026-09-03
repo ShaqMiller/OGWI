@@ -52,6 +52,11 @@ export function ExamResults({ runId }: { runId: string }) {
             : `Not yet at the ${data.passMarkPercent}% pass mark.`}
         </p>
         <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+          {/* Doc 2 B8: exam litres accrue silently and pay here, at the
+              feedback screen - this is the first time they are shown. */}
+          Earned <strong style={{ color: 'var(--color-text)' }}>{data.litresEarned}</strong> points
+        </p>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
           Took {formatDuration(data.secondsUsed)} of about{' '}
           {formatDuration(data.allottedSeconds)} allowed
           {data.answeredCount < data.scoredCount && (

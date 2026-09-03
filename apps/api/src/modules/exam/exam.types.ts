@@ -1,4 +1,4 @@
-import type { ExamRunStatus } from '@ogwi/shared';
+import type { ExamRunKind, ExamRunStatus } from '@ogwi/shared';
 
 export type { ExamPaper, ExamQuestion, ExamResults, ExamRunStatus } from '@ogwi/shared';
 
@@ -37,6 +37,7 @@ export interface ExamRunRow {
   qualificationId: string;
   qualificationSlug: string;
   qualificationName: string;
+  kind: ExamRunKind;
   status: ExamRunStatus;
   questionCount: number;
   allottedSeconds: number;

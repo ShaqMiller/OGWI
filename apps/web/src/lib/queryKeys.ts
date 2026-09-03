@@ -50,4 +50,9 @@ export const queryKeys = {
     all: () => ['recall'] as const,
     keyPoints: (topicId: string) => [...queryKeys.recall.all(), 'keyPoints', topicId] as const,
   },
+  exam: {
+    all: () => ['exam'] as const,
+    run: (runId: string) => [...queryKeys.exam.all(), 'run', runId] as const,
+    results: (runId: string) => [...queryKeys.exam.all(), 'results', runId] as const,
+  },
 } as const;

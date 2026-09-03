@@ -57,6 +57,10 @@ export const multipleChoiceContentSchema = z
     prompt: z.string().min(1),
     options: z.array(z.string().min(1)).min(2),
     correctOptionIndex: z.number().int().nonnegative(),
+    // Doc 2 A5A's Review Answers wants "an explanation in the form
+    // '[answer] is correct because...'". Optional because no seeded content
+    // has one yet; lives inside the existing Json column, so no migration.
+    explanation: z.string().min(1).optional(),
   })
   .refine((content) => content.correctOptionIndex < content.options.length, {
     message: 'correctOptionIndex is out of range for options',

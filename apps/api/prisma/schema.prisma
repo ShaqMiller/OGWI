@@ -35,9 +35,10 @@ model Qualification {
   // (Doc 2 C6: "the qualification record" owns this; everyone else reads
   // it). Defaulted rather than left nullable so existing rows don't need a
   // backfill - 0.70 is a placeholder, not a researched value.
-  passMark Decimal @default(0.70) @db.Decimal(5, 4)
+  passMark            Decimal  @default(0.70) @db.Decimal(5, 4)
 
-  modules Module[]
+  modules  Module[]
+  examRuns ExamRun[]
 
   @@map("qualifications")
 }
@@ -69,15 +70,15 @@ enum FlowTemplateSlot {
 }
 
 model Topic {
-  id       String            @id @default(uuid())
-  moduleId String
-  name     String
-  order    Int
+  id              String           @id @default(uuid())
+  moduleId        String
+  name            String
+  order           Int
   // Which named flow-template this topic was assigned at content-build time.
   // The template library itself is authored content, not enumerated here.
-  flowTemplate     String?
-  quizPosition     FlowTemplateSlot @default(NONE)
-  hasActivitySlot  Boolean          @default(false)
+  flowTemplate    String?
+  quizPosition    FlowTemplateSlot @default(NONE)
+  hasActivitySlot Boolean          @default(false)
 
   module     Module      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
   objectives Objective[]
@@ -92,14 +93,14 @@ enum ObjectiveKind {
 }
 
 model Objective {
-  id       String        @id @default(uuid())
-  topicId  String
-  name     String
-  order    Int
-  kind     ObjectiveKind
+  id        String        @id @default(uuid())
+  topicId   String
+  name      String
+  order     Int
+  kind      ObjectiveKind
   // Published sub-weight within the module, where the awarding body
   // provides one; null means equal split among the topic's objectives.
-  subWeight Decimal? @db.Decimal(5, 4)
+  subWeight Decimal?      @db.Decimal(5, 4)
 
   topic          Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
   keyPoints      KeyPoint[]
@@ -139,7 +140,11 @@ model KnowledgeItem {
   itemMemoryStates ItemMemoryState[]
   reviewEvents     ReviewEvent[]
   litreEvents      LitreEvent[]
+  examRunItems     ExamRunItem[]
 
+  // Every qualification-scoped query walks objective -> topic -> module;
+  // exam paper generation makes that path hot enough to index.
+  @@index([objectiveId])
   @@map("knowledge_items")
 }
 
@@ -329,8 +334,8 @@ model Flight {
 }
 
 model FlightEvent {
-  id       String          @id @default(uuid())
-  flightId String
+  id        String          @id @default(uuid())
+  flightId  String
   learnerId String
   eventType FlightEventType
 
@@ -338,9 +343,9 @@ model FlightEvent {
   // offline/late-syncing pumps).
   effectiveAt DateTime
   // Record time: when this row was appended. Never mutated.
-  appendedAt DateTime @default(now())
+  appendedAt  DateTime @default(now())
   // Monotonic append order, for deterministic tie-break on equal effectiveAt.
-  sequence BigInt @default(autoincrement())
+  sequence    BigInt   @default(autoincrement())
 
   // Required for PUMP events (and harmless elsewhere) so retried writes
   // never double-credit litres.
@@ -404,7 +409,7 @@ model LitreEvent {
   source    LitreEventSource
   // Litres/points credited by this event. Never negative - see the CHECK
   // constraint added in the migration.
-  amount Int
+  amount    Int
 
   knowledgeItemId String?
   knowledgeItem   KnowledgeItem? @relation(fields: [knowledgeItemId], references: [id])
@@ -412,7 +417,7 @@ model LitreEvent {
 
   litreConfigVersion String
   effectiveAt        DateTime
-  createdAt           DateTime @default(now())
+  createdAt          DateTime @default(now())
 
   @@index([learnerId, effectiveAt])
   @@map("litre_events")
@@ -446,4 +451,103 @@ model ConfigDocument {
 
   @@unique([configType, version])
   @@map("config_documents")
+}
+
+// ---------------------------------------------------------------------------
+// Exam runs (build step 12) - Doc 2 A5 / A5A
+// ---------------------------------------------------------------------------
+//
+// An exam run is a randomised paper, sat under exam conditions: no feedback
+// of any kind while it is in progress (invariant 10, "exam mode contains no
+// aid machinery"). Everything is marked at submit, never at answer time.
+//
+// ExamRunItem is deliberately MUTABLE, unlike ReviewEvent/FlightEvent/
+// LitreEvent. Append-only in this schema is a property of the three event
+// ledgers, not of working state - ItemMemoryState and PublishedMastery are
+// upserted too. A paper's selections change as the learner revisits
+// questions; the ledger record of a run is the ReviewEvents written at
+// submit, and those are still write-once.
+
+enum ExamRunKind {
+  // A full randomised practice exam (the Practice page's single entry).
+  SIMULATION
+  // A learner-built test. Reserved so that when the test builder lands it
+  // does not silently start counting toward readiness's certainty band.
+  CUSTOM
+}
+
+enum ExamRunStatus {
+  IN_PROGRESS
+  SUBMITTED
+}
+
+model ExamRun {
+  id              String        @id @default(uuid())
+  learnerId       String
+  qualificationId String
+  kind            ExamRunKind   @default(SIMULATION)
+  status          ExamRunStatus @default(IN_PROGRESS)
+
+  // The paper's REAL size, which is capped by how much content exists - not
+  // the configured target. allottedSeconds is derived from it, so a short
+  // paper never advertises a full paper's duration.
+  questionCount   Int
+  allottedSeconds Int
+
+  startedAt   DateTime  @default(now())
+  submittedAt DateTime?
+
+  // Counts rather than a percent: the results screen shows "12 of 20", and
+  // storing the parts avoids any rounding disagreement with what was
+  // displayed. scoredCount can differ from questionCount if an item became
+  // unmarkable between generation and submit.
+  correctCount Int?
+  scoredCount  Int?
+  passed       Boolean?
+
+  // Both snapshotted at creation. Qualification.passMark is mutable, and
+  // without a snapshot, editing it would retroactively rewrite the verdict
+  // on every past run.
+  contentGraphVersion String
+  passMarkSnapshot    Decimal @db.Decimal(5, 4)
+
+  // A real FK, unlike Flight.qualificationId. ReviewEvent.renderingId is a
+  // bare id because it must outlive content edits; an exam run for a deleted
+  // qualification has no such claim on survival.
+  qualification Qualification @relation(fields: [qualificationId], references: [id], onDelete: Cascade)
+  items         ExamRunItem[]
+
+  // Nothing enforces one in-progress run per learner: Doc 2 A5 promises "a
+  // fresh randomised paper each time", so several open papers is the
+  // expected result of starting twice. Only SUBMITTED runs are evidence.
+  @@index([learnerId, qualificationId, status])
+  @@map("exam_runs")
+}
+
+model ExamRunItem {
+  id              String @id @default(uuid())
+  examRunId       String
+  knowledgeItemId String
+  // Bare id with no FK, for the same reason as ReviewEvent.renderingId: it
+  // records which rendering was actually served and must outlive edits.
+  renderingId     String
+  position        Int
+
+  selectedOptionIndex Int?
+  selectedAt          DateTime?
+
+  // Written only at submit. Named for marking, not for answering - the two
+  // are deliberately far apart in time.
+  correct  Boolean?
+  // The at-most-once claim marker that makes submit idempotent: an item is
+  // claimed before it is graded, so a crashed submit can be retried without
+  // writing a second ReviewEvent into an append-only log.
+  gradedAt DateTime?
+
+  examRun       ExamRun       @relation(fields: [examRunId], references: [id], onDelete: Cascade)
+  knowledgeItem KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+
+  @@unique([examRunId, position])
+  @@unique([examRunId, knowledgeItemId])
+  @@map("exam_run_items")
 }

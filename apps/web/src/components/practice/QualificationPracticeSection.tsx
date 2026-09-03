@@ -5,6 +5,7 @@ import type { Qualification } from '@ogwi/shared';
 import { useDueItems } from '@/hooks/scheduler/useDueItems';
 import { useWrongAnswerPool } from '@/hooks/adaptive/useWrongAnswerPool';
 import { ItemQueueQuiz } from '@/components/quiz/ItemQueueQuiz';
+import { ExamSimulationCard } from './ExamSimulationCard';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
@@ -84,6 +85,8 @@ export function QualificationPracticeSection({ qualification }: { qualification:
           </div>
         );
       })}
+
+      <ExamSimulationCard qualificationSlug={qualification.slug} />
     </Card>
   );
 }

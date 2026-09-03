@@ -1,4 +1,4 @@
-import { ExamShell } from '@/components/flow/ExamShell';
+import { ExamShell } from '@/components/exam/ExamShell';
 
 /**
  * Exam mode is a structurally separate route group from (flow), not a

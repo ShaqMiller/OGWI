@@ -15,13 +15,17 @@ export function MultipleChoiceOptions({
   correctOptionIndex,
   selectedOption,
   onSelect,
+  readOnly = false,
 }: {
   options: string[];
   correctOptionIndex: number | null;
   selectedOption: number | null;
   onSelect: (index: number) => void;
+  /** For review screens, where the answer is shown but nothing is selectable. */
+  readOnly?: boolean;
 }) {
   const marked = correctOptionIndex !== null;
+  const locked = readOnly || selectedOption !== null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
@@ -50,7 +54,7 @@ export function MultipleChoiceOptions({
           <button
             key={option}
             type="button"
-            disabled={selectedOption !== null}
+            disabled={locked}
             onClick={() => onSelect(index)}
             style={{
               textAlign: 'left',
@@ -59,7 +63,7 @@ export function MultipleChoiceOptions({
               color,
               border: `1px solid ${borderColor}`,
               borderRadius: 'var(--radius)',
-              cursor: selectedOption === null ? 'pointer' : 'default',
+              cursor: locked ? 'default' : 'pointer',
               fontSize: '0.95rem',
               opacity: isSelected && !marked ? 0.7 : 1,
             }}

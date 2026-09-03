@@ -121,6 +121,31 @@ export async function findGradableRendering(
 }
 
 /**
+ * Bulk form of findGradableRendering, keyed by renderingId. Each pair is
+ * scoped by BOTH ids in the same way, so a rendering that doesn't belong to
+ * its claimed item simply isn't in the returned map - the ownership check
+ * can't be skipped by using this instead of the single-row version.
+ */
+export async function findGradableRenderings(
+  pairs: { knowledgeItemId: string; renderingId: string }[],
+): Promise<Map<string, GradableRendering>> {
+  if (pairs.length === 0) return new Map();
+
+  const rows = await prisma.rendering.findMany({
+    where: {
+      OR: pairs.map(({ knowledgeItemId, renderingId }) => ({ id: renderingId, knowledgeItemId })),
+    },
+  });
+
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      { renderingId: row.id, format: row.format, content: row.content },
+    ]),
+  );
+}
+
+/**
  * How many renderings each of these items has. Used by the adaptive engine
  * to decide whether the "two different renderings" remediation exit rule can
  * apply at all - enforcing it on a single-rendering item would make exit

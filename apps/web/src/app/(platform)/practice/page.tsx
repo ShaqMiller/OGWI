@@ -7,8 +7,9 @@ import { QualificationPracticeSection } from '@/components/practice/Qualificatio
  * Doc 2 A9's Practice page has six sections. Only "Recommended" is backed
  * by real, working endpoints right now (the scheduler's due items, the
  * adaptive engine's wrong-answer pool) - see docs/BUILD_ORDER.md step 7.
- * The rest (Jump back in, Exam Simulation, Create a test, Activities,
- * Completed) need systems that don't exist yet and aren't faked here.
+ * Exam Simulation is now real too (docs/BUILD_ORDER.md step 12). The rest
+ * (Jump back in, Create a test, Activities, Completed) need systems that
+ * don't exist yet and aren't faked here.
  */
 export default function PracticePage() {
   const { data, isLoading, error } = useQualifications();
@@ -25,9 +26,9 @@ export default function PracticePage() {
       ))}
 
       <p style={{ marginTop: 'var(--space-6)', fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
-        Not built yet: jump back into a paused quiz, exam simulations, building a custom test,
-        and a history of completed attempts. Blurt and Teach Oggi are available from a
-        qualification&apos;s page.
+        Not built yet: jump back into a paused quiz, building a custom test, and a history of
+        completed attempts. Exams have no timer, flagging or question-navigation panel yet
+        either. Blurt and Teach Oggi are available from a qualification&apos;s page.
       </p>
     </div>
   );

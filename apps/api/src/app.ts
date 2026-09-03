@@ -13,6 +13,7 @@ import { adaptiveRouter } from './modules/adaptive/adaptive.routes.js';
 import { compositionRouter } from './modules/composition/composition.routes.js';
 import { contentGraphRouter } from './modules/content-graph/content-graph.routes.js';
 import { economyRouter } from './modules/economy/economy.routes.js';
+import { examRouter } from './modules/exam/exam.routes.js';
 import { flightRouter } from './modules/flight/flight.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { masteryRouter } from './modules/mastery/mastery.routes.js';
@@ -37,6 +38,7 @@ export function createApp(): Express {
   app.use('/api/flight', flightRouter);
   app.use('/api/readiness', readinessRouter);
   app.use('/api/recall', recallRouter);
+  app.use('/api/exam', examRouter);
 
   // Error handler must be registered last.
   app.use(errorHandler);

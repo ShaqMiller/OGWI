@@ -46,12 +46,25 @@ export async function submitAnswer(
   };
 }
 
-export async function gradeReview(
+/**
+ * Everything gradeReview does except pumping the flight, returning the points
+ * it awarded so the caller can pump once for a batch.
+ *
+ * This exists for exam submission. Pumping per item there would be
+ * quadratic - flightService.pump calls getFlightState, which replays the
+ * flight's entire pump history - so a 30-question paper would re-read the
+ * whole history thirty times. Aggregating is behaviourally equivalent: fill
+ * is additive and the award check already scans the whole crossed span.
+ *
+ * Litres are NOT aggregated: LitreEvent is source-itemised, one row per
+ * learning act (Doc 2 B8).
+ */
+export async function gradeReviewDeferringPump(
   learnerId: string,
   knowledgeItemId: string,
   grade: ReviewGradeInput,
   renderingId: string | null,
-): Promise<GradedItemState> {
+): Promise<{ state: GradedItemState; pointsAwarded: number }> {
   const now = new Date();
   const existing = await schedulerRepository.findItemMemoryState(learnerId, knowledgeItemId);
 
@@ -84,18 +97,45 @@ export async function gradeReview(
   const points = economyService.priceReviewGrade({ hadPriorState: existing !== null, wasDue, grade });
   await economyService.awardForReview(learnerId, knowledgeItemId, points);
 
+  return { state: { knowledgeItemId, ...persisted }, pointsAwarded: points };
+}
+
+export async function gradeReview(
+  learnerId: string,
+  knowledgeItemId: string,
+  grade: ReviewGradeInput,
+  renderingId: string | null,
+): Promise<GradedItemState> {
+  const { state, pointsAwarded } = await gradeReviewDeferringPump(
+    learnerId,
+    knowledgeItemId,
+    grade,
+    renderingId,
+  );
+
   // Litres and flight fill are the same currency (Doc 2 B9 builds on B8's
   // source-itemised litre events) - every earned point pumps the flight.
-  if (points > 0) {
-    const qualificationId = await contentGraphService.getQualificationIdForKnowledgeItem(
-      knowledgeItemId,
-    );
-    if (qualificationId) {
-      await flightService.pump(learnerId, qualificationId, points);
-    }
+  if (pointsAwarded > 0) {
+    await pumpForKnowledgeItem(learnerId, knowledgeItemId, pointsAwarded);
   }
 
-  return { knowledgeItemId, ...persisted };
+  return state;
+}
+
+/** Resolves an item's qualification and pumps its flight. No-op when unresolvable. */
+export async function pumpForKnowledgeItem(
+  learnerId: string,
+  knowledgeItemId: string,
+  points: number,
+): Promise<void> {
+  if (points <= 0) return;
+
+  const qualificationId =
+    await contentGraphService.getQualificationIdForKnowledgeItem(knowledgeItemId);
+
+  if (qualificationId) {
+    await flightService.pump(learnerId, qualificationId, points);
+  }
 }
 
 export async function getDueItems(

@@ -1,0 +1,441 @@
+// Ogwi database schema.
+//
+// Scope for this pass (see docs/BUILD_ORDER.md step 1): the content graph +
+// mapping table, fully modelled with their relations, plus schema-only
+// skeletons (no service logic yet) for the three pieces whose guarantees are
+// structural and expensive to retrofit later: the flight event log, litre
+// events, and config versioning.
+//
+// The content graph is treated as a real, editable domain model here, not a
+// literal transcription of every field named in the handover docs - some
+// build-time validation gates (item counts per topic, etc.) live as
+// constants in packages/shared instead of DB constraints, since they're
+// range checks over aggregates rather than single-row invariants.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Content graph (build step 1)
+// ---------------------------------------------------------------------------
+
+model Qualification {
+  id                  String   @id @default(uuid())
+  slug                String   @unique
+  name                String
+  contentGraphVersion String
+  createdAt           DateTime @default(now())
+  // The single bar for mastered states, Biggest Opportunity and readiness
+  // (Doc 2 C6: "the qualification record" owns this; everyone else reads
+  // it). Defaulted rather than left nullable so existing rows don't need a
+  // backfill - 0.70 is a placeholder, not a researched value.
+  passMark Decimal @default(0.70) @db.Decimal(5, 4)
+
+  modules Module[]
+
+  @@map("qualifications")
+}
+
+model Module {
+  id              String  @id @default(uuid())
+  qualificationId String
+  name            String
+  order           Int
+  // Share of the exam this module represents, per the awarding body's
+  // published blueprint. 0.0000-1.0000.
+  blueprintWeight Decimal @db.Decimal(5, 4)
+
+  qualification Qualification @relation(fields: [qualificationId], references: [id], onDelete: Cascade)
+  topics        Topic[]
+
+  publishedMastery PublishedMastery[]
+
+  @@unique([qualificationId, order])
+  @@map("modules")
+}
+
+enum FlowTemplateSlot {
+  EARLY
+  MID
+  END
+  SPLIT_IN_TWO
+  NONE
+}
+
+model Topic {
+  id       String            @id @default(uuid())
+  moduleId String
+  name     String
+  order    Int
+  // Which named flow-template this topic was assigned at content-build time.
+  // The template library itself is authored content, not enumerated here.
+  flowTemplate     String?
+  quizPosition     FlowTemplateSlot @default(NONE)
+  hasActivitySlot  Boolean          @default(false)
+
+  module     Module      @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  objectives Objective[]
+
+  @@unique([moduleId, order])
+  @@map("topics")
+}
+
+enum ObjectiveKind {
+  FACT_HEAVY
+  CONCEPTUAL
+}
+
+model Objective {
+  id       String        @id @default(uuid())
+  topicId  String
+  name     String
+  order    Int
+  kind     ObjectiveKind
+  // Published sub-weight within the module, where the awarding body
+  // provides one; null means equal split among the topic's objectives.
+  subWeight Decimal? @db.Decimal(5, 4)
+
+  topic          Topic           @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  keyPoints      KeyPoint[]
+  knowledgeItems KnowledgeItem[]
+
+  @@unique([topicId, order])
+  @@map("objectives")
+}
+
+enum KeyPointTier {
+  CRITICAL
+  SUPPORTING
+}
+
+model KeyPoint {
+  id          String       @id @default(uuid())
+  objectiveId String
+  plainName   String
+  cueQuestion String
+  tier        KeyPointTier
+
+  objective      Objective       @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  knowledgeItems KnowledgeItem[]
+
+  @@map("key_points")
+}
+
+model KnowledgeItem {
+  id          String  @id @default(uuid())
+  objectiveId String
+  keyPointId  String?
+
+  objective  Objective   @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  keyPoint   KeyPoint?   @relation(fields: [keyPointId], references: [id])
+  renderings Rendering[]
+
+  itemMemoryStates ItemMemoryState[]
+  reviewEvents     ReviewEvent[]
+  litreEvents      LitreEvent[]
+
+  @@map("knowledge_items")
+}
+
+enum RenderingRole {
+  BASE
+  VARIANT
+  LADDER
+}
+
+enum RenderingFormat {
+  MULTIPLE_CHOICE
+  MULTIPLE_RESPONSE
+  TRUE_FALSE
+  TYPED_SHORT_ANSWER
+  AI_MARKED_LONG_ANSWER
+  SEQUENCING
+  MATCHING
+  FILL_IN_THE_BLANKS
+  SORTING
+  PICK_AN_IMAGE
+}
+
+model Rendering {
+  id              String          @id @default(uuid())
+  knowledgeItemId String
+  role            RenderingRole
+  format          RenderingFormat
+  content         Json
+  lastServedAt    DateTime?
+  createdAt       DateTime        @default(now())
+
+  knowledgeItem KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+
+  @@index([knowledgeItemId])
+  @@map("renderings")
+}
+
+// A human-confirmed "confusable with" link between two items, used by the
+// adaptive engine's gap-quiz padding and by interleaved composition. No
+// edge, no mixing (Doc 2 B10) - this table is the only source for either.
+model ConfusableEdge {
+  id             String @id @default(uuid())
+  itemAId        String
+  itemBId        String
+  confirmedByRef String // free-text pointer to the reviewer/review record; no reviewer/user model exists yet
+
+  @@unique([itemAId, itemBId])
+  @@map("confusable_edges")
+}
+
+// ---------------------------------------------------------------------------
+// Spaced-repetition scheduler (build step 2) + mastery scoreboard (step 3)
+// ---------------------------------------------------------------------------
+//
+// The "memory tracker": per-learner, per-item FSRS state (Difficulty,
+// Stability, due date), driven by the ts-fsrs library using its published
+// default parameters. ItemMemoryState holds the current card; ReviewEvent
+// is an append-only log of every grade, mirroring Doc 2 B4's "every graded
+// question writes one review event" rule (the log itself is a simple
+// append-only table here, not yet wired into the bi-temporal flight-log
+// machinery - that's a later integration, not duplicated here).
+//
+// schedulerConfigVersion is a plain string constant for now
+// (packages/shared's SCHEDULER_CONFIG_VERSION), not read from
+// ConfigDocument - full config-registry versioning is a separable piece of
+// work from making the scheduler function correctly.
+
+enum SchedulerCardState {
+  NEW
+  LEARNING
+  REVIEW
+  RELEARNING
+}
+
+enum ReviewGrade {
+  AGAIN
+  GOOD
+}
+
+model ItemMemoryState {
+  id              String @id @default(uuid())
+  learnerId       String
+  knowledgeItemId String
+
+  difficulty     Float
+  stability      Float
+  due            DateTime
+  lastReviewedAt DateTime?
+  scheduledDays  Int                @default(0)
+  learningSteps  Int                @default(0)
+  reps           Int                @default(0)
+  lapses         Int                @default(0)
+  state          SchedulerCardState @default(NEW)
+
+  schedulerConfigVersion String
+
+  knowledgeItem KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, knowledgeItemId])
+  @@index([learnerId, due])
+  @@map("item_memory_states")
+}
+
+// Append-only: every graded answer writes one row here. Nothing updates or
+// deletes an existing row.
+model ReviewEvent {
+  id              String  @id @default(uuid())
+  learnerId       String
+  knowledgeItemId String
+  renderingId     String?
+
+  grade      ReviewGrade
+  reviewedAt DateTime    @default(now())
+
+  resultingDifficulty Float
+  resultingStability  Float
+  resultingDue        DateTime
+
+  schedulerConfigVersion String
+
+  knowledgeItem KnowledgeItem @relation(fields: [knowledgeItemId], references: [id], onDelete: Cascade)
+
+  @@index([learnerId, knowledgeItemId])
+  @@map("review_events")
+}
+
+// The "kind but honest" display layer (Doc 2 B1): displayedScore only ever
+// sits at-or-above the live computed score, easing toward it on decline
+// with a 7-day half-life rather than jumping down immediately. Live scores
+// are computed on demand from ItemMemoryState and are never stored.
+model PublishedMastery {
+  id              String   @id @default(uuid())
+  learnerId       String
+  moduleId        String
+  displayedScore  Float
+  lastPublishedAt DateTime @default(now())
+
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([learnerId, moduleId])
+  @@map("published_mastery")
+}
+
+// ---------------------------------------------------------------------------
+// Flight event log (schema skeleton only - no physics/service logic yet)
+// ---------------------------------------------------------------------------
+//
+// Append-only. Bi-temporal: effectiveAt is physics time (when the event
+// actually happened), sequence is append order (breaks ties / resolves
+// races). Corrections are `ANNUL` events that reference the invalidated
+// event and are never deletes.
+//
+// Structural guarantees that live here as DB constraints (see the migration
+// SQL for the ones Prisma's schema language can't express declaratively):
+//   - idempotencyKey is unique -> pumps are idempotent
+//   - one TOUCHDOWN per flight (partial unique index, added in migration)
+//   - one AWARD_EARNED per (learnerId, awardSlug) (partial unique index)
+
+enum FlightEventType {
+  PUMP
+  LIFTOFF
+  TOUCHDOWN
+  AWARD_EARNED
+  NOTIFICATION_SENT
+  CONFIG_VERSION_MARKER
+  ANNUL
+}
+
+model Flight {
+  id              String   @id @default(uuid())
+  learnerId       String
+  qualificationId String
+  startedAt       DateTime
+
+  events FlightEvent[]
+
+  @@index([learnerId])
+  @@map("flights")
+}
+
+model FlightEvent {
+  id       String          @id @default(uuid())
+  flightId String
+  learnerId String
+  eventType FlightEventType
+
+  // Physics time: when the event actually happened (may be backdated for
+  // offline/late-syncing pumps).
+  effectiveAt DateTime
+  // Record time: when this row was appended. Never mutated.
+  appendedAt DateTime @default(now())
+  // Monotonic append order, for deterministic tie-break on equal effectiveAt.
+  sequence BigInt @default(autoincrement())
+
+  // Required for PUMP events (and harmless elsewhere) so retried writes
+  // never double-credit litres.
+  idempotencyKey String? @unique
+
+  // Event-type-specific data (litres for a pump, award slug for
+  // award-earned, etc.). Kept as JSON at this schema-only stage.
+  payload Json
+
+  // Only set on ANNUL events: the event this one invalidates. The
+  // invalidated event is never deleted.
+  annulsEventId String?
+  annulsEvent   FlightEvent?  @relation("Annulments", fields: [annulsEventId], references: [id])
+  annulledBy    FlightEvent[] @relation("Annulments")
+
+  // Every event is stamped with the config versions in force, so replay can
+  // select the right version for its era.
+  physicsConfigVersion String
+  litreConfigVersion   String?
+
+  createdAt DateTime @default(now())
+
+  flight Flight @relation(fields: [flightId], references: [id], onDelete: Cascade)
+
+  @@index([flightId, effectiveAt])
+  @@index([learnerId, effectiveAt])
+  @@map("flight_events")
+}
+
+// ---------------------------------------------------------------------------
+// Litre events / points economy (apps/api/src/modules/economy/)
+// ---------------------------------------------------------------------------
+//
+// Source-itemised: every row records which learning act paid it. The
+// "litres never subtract" invariant is enforced structurally by a
+// non-negative CHECK constraint on `amount` (added in the migration SQL)
+// rather than by application discipline alone.
+//
+// Deliberately simple pricing for now (three tiers on a graded answer -
+// first-ever correct, correct-when-due, correct-when-not-due - plus zero
+// for incorrect): the original spec's fuller economy (combo bonuses, hard
+// question multipliers, session caps) is not built. Revisit with the
+// client once there's a view on what they actually want here.
+
+enum LitreEventSource {
+  THEORY_PAGE
+  QUIZ_ANSWER
+  BLURT
+  TEACH_OGGI
+  DEBRIEF
+  TOPIC_COMPLETION
+  RECALL_DAY
+  ASSESSMENT
+  BONUS
+}
+
+model LitreEvent {
+  id        String           @id @default(uuid())
+  learnerId String
+  flightId  String?
+  source    LitreEventSource
+  // Litres/points credited by this event. Never negative - see the CHECK
+  // constraint added in the migration.
+  amount Int
+
+  knowledgeItemId String?
+  knowledgeItem   KnowledgeItem? @relation(fields: [knowledgeItemId], references: [id])
+  idempotencyKey  String         @unique
+
+  litreConfigVersion String
+  effectiveAt        DateTime
+  createdAt           DateTime @default(now())
+
+  @@index([learnerId, effectiveAt])
+  @@map("litre_events")
+}
+
+// ---------------------------------------------------------------------------
+// Config versioning
+// ---------------------------------------------------------------------------
+//
+// Configs are immutable, timestamped, versioned documents (Doc 2 Part C3).
+// Forward-only: a new version is always a new row, never an update to an
+// existing one. Every event elsewhere in the system is stamped with the
+// config version(s) in force so replay can select the version for its era.
+
+enum ConfigType {
+  LITRE
+  PHYSICS
+  SCHEDULER
+  MASTERY
+  OGGI
+  READINESS
+}
+
+model ConfigDocument {
+  id            String     @id @default(uuid())
+  configType    ConfigType
+  version       Int
+  effectiveFrom DateTime
+  content       Json
+  createdAt     DateTime   @default(now())
+
+  @@unique([configType, version])
+  @@map("config_documents")
+}

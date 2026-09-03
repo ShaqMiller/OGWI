@@ -1,0 +1,58 @@
+:root {
+  color-scheme: dark;
+
+  /* A small, cohesive dark palette - formalises colours already used ad hoc
+     (e.g. the #4a90d9 progress-bar blue) rather than changing them. This is
+     a light-touch pass, not a design system - real designs are coming
+     later. */
+  --color-bg: #0f1115;
+  --color-bg-elevated: #171a21;
+  --color-border: #2a2f3a;
+  --color-text: #e8eaed;
+  --color-text-muted: #9aa1ac;
+  --color-primary: #4a90d9;
+  --color-primary-hover: #5da0e8;
+  --color-success: #4caf82;
+  --color-success-bg: #1c3329;
+  --color-danger: #d9756a;
+  --color-danger-bg: #3a2320;
+
+  --radius: 8px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+a {
+  color: var(--color-primary);
+}
+
+button {
+  font-family: inherit;
+}

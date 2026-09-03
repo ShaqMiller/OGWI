@@ -1,0 +1,22 @@
+node_modules/
+dist/
+build/
+.next/
+out/
+coverage/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.tsbuildinfo
+.turbo/
+pnpm-lock.yaml.bak
+
+# Prisma
+apps/api/prisma/migrations/.gitkeep-ignore
+
+# Editors
+.vscode/*
+!.vscode/extensions.json
+.idea/

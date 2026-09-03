@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(brew install *)",
+      "Bash(npm install *)",
+      "Read(//usr/local/lib/node_modules/corepack/dist/**)",
+      "Bash(rm -f /usr/local/bin/pnpm)",
+      "Bash(pnpm --version)",
+      "Bash(mkdir -p \"/Users/shaquillemiller/Documents/repo/ogwi/apps/web/src/app/api/[...path]\")",
+      "Bash(mkdir -p /Users/shaquillemiller/Documents/repo/ogwi/apps/web/src/app/'\\(flow\\)'/topic/'[topicId]' \"/Users/shaquillemiller/Documents/repo/ogwi/apps/web/src/app/\\(flow\\)/exam/[examId]\" /Users/shaquillemiller/Documents/repo/ogwi/apps/web/src/components/flow)",
+      "Bash(cd /Users/shaquillemiller/Documents/repo/ogwi/apps/web/src/app && rm -rf '\\(flow\\)/exam' && mkdir -p '\\(exam\\)/exam/[examId]' && ls -la)"
+    ]
+  }
+}

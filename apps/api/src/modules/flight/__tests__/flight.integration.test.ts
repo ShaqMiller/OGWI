@@ -26,14 +26,14 @@ describe('grading a review pumps the flight end to end', () => {
 
     // First-ever-correct pays 5 points each; five items = 25 (grounded).
     for (const itemId of itemIds.slice(0, 5)) {
-      await schedulerService.gradeReview(learnerId, itemId, 'good', null);
+      await schedulerService.gradeReview(learnerId, itemId, 'good', null, randomUUID());
     }
     const grounded = await flightService.getFlightState(learnerId, qualificationId);
     expect(grounded.fill).toBe(25);
     expect(grounded.isAirborne).toBe(false);
 
     // A wrong answer pays 0 and must not change the flight at all.
-    await schedulerService.gradeReview(learnerId, itemIds[5]!, 'again', null);
+    await schedulerService.gradeReview(learnerId, itemIds[5]!, 'again', null, randomUUID());
     const afterWrongAnswer = await flightService.getFlightState(learnerId, qualificationId);
     expect(afterWrongAnswer.fill).toBe(25);
   });
@@ -41,10 +41,10 @@ describe('grading a review pumps the flight end to end', () => {
   it('awards "first_lift" exactly once, at the crossing', async () => {
     const learnerId = randomUUID();
 
-    let state = await flightService.pump(learnerId, qualificationId, 60);
+    let state = await flightService.pump(learnerId, qualificationId, 60, randomUUID());
     expect(state.isAirborne).toBe(false);
 
-    state = await flightService.pump(learnerId, qualificationId, 60);
+    state = await flightService.pump(learnerId, qualificationId, 60, randomUUID());
     expect(state.isAirborne).toBe(true);
 
     const awardEvents = await prisma.flightEvent.findMany({
@@ -54,7 +54,7 @@ describe('grading a review pumps the flight end to end', () => {
     expect(awardEvents[0]?.payload).toMatchObject({ awardSlug: 'first_lift' });
 
     // Pumping again after liftoff must not re-award it.
-    await flightService.pump(learnerId, qualificationId, 10);
+    await flightService.pump(learnerId, qualificationId, 10, randomUUID());
     const awardEventsAfter = await prisma.flightEvent.findMany({
       where: { learnerId, eventType: 'AWARD_EARNED' },
     });
@@ -66,7 +66,7 @@ describe('grading a review pumps the flight end to end', () => {
 
     // One pump straight past 100, 200 and 300 should earn all three, not
     // just the highest one it happened to land on.
-    const state = await flightService.pump(learnerId, qualificationId, 350);
+    const state = await flightService.pump(learnerId, qualificationId, 350, randomUUID());
     expect(state.fill).toBe(350);
 
     const awardEvents = await prisma.flightEvent.findMany({
@@ -85,7 +85,7 @@ describe('getAwards', () => {
     expect(beforeAny).toHaveLength(5);
     expect(beforeAny.every((a) => a.earnedAt === null)).toBe(true);
 
-    await flightService.pump(learnerId, qualificationId, 150);
+    await flightService.pump(learnerId, qualificationId, 150, randomUUID());
     const afterLiftoff = await flightService.getAwards(learnerId);
 
     const firstLift = afterLiftoff.find((a) => a.slug === 'first_lift');

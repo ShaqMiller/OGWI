@@ -9,6 +9,7 @@ import {
 } from '@ogwi/shared';
 import { NotFoundError, ValidationError } from '../../errors/index.js';
 import * as contentGraphService from '../content-graph/content-graph.service.js';
+import { examItemActKey, pumpKey } from '../scheduler/idempotency.util.js';
 import * as schedulerService from '../scheduler/scheduler.service.js';
 import * as examRepository from './exam.repository.js';
 import { allocatePaper, buildPaperOrder } from './paper-blueprint.util.js';
@@ -234,6 +235,7 @@ async function writeEngineEvents(runId: string, learnerId: string): Promise<void
   const now = new Date();
   let totalPoints = 0;
   let lastGradedItemId: string | null = null;
+  let firstClaimedItemId: string | null = null;
 
   for (const item of run.items) {
     if (item.selectedOptionIndex === null || item.correct === null) continue;
@@ -243,11 +245,15 @@ async function writeEngineEvents(runId: string, learnerId: string): Promise<void
     const claimed = await examRepository.claimForGrading(item.id, now);
     if (!claimed) continue;
 
+    firstClaimedItemId ??= item.id;
+
     const { pointsAwarded } = await schedulerService.gradeReviewDeferringPump(
       learnerId,
       item.knowledgeItemId,
       item.correct ? 'good' : 'again',
       item.renderingId,
+      examItemActKey(item.id),
+      item.selectedOptionIndex,
     );
 
     totalPoints += pointsAwarded;
@@ -256,8 +262,19 @@ async function writeEngineEvents(runId: string, learnerId: string): Promise<void
 
   // One pump for the paper rather than one per question: pumping replays the
   // whole flight history each time, so per-item would be quadratic.
-  if (totalPoints > 0 && lastGradedItemId) {
-    await schedulerService.pumpForKnowledgeItem(learnerId, lastGradedItemId, totalPoints);
+  //
+  // The key is per BATCH, not per run. submitRun is resumable, so a second
+  // invocation claims whatever items remain and pumps a different total -
+  // keying on runId would find the key taken, no-op, and silently lose that
+  // batch's altitude. claimForGrading guarantees batches are disjoint, so the
+  // first item claimed in this pass names it uniquely.
+  if (totalPoints > 0 && lastGradedItemId && firstClaimedItemId) {
+    await schedulerService.pumpForKnowledgeItem(
+      learnerId,
+      lastGradedItemId,
+      totalPoints,
+      pumpKey(examItemActKey(firstClaimedItemId)),
+    );
   }
 }
 

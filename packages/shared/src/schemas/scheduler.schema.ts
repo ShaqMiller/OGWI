@@ -42,6 +42,17 @@ export const submitAnswerRequestSchema = z.object({
   knowledgeItemId: z.string().uuid(),
   renderingId: z.string().uuid(),
   answer: submittedAnswerSchema,
+  /**
+   * Identifies this ATTEMPT, so a retried request is recognised as the same
+   * learning act rather than written twice. The client mints it once per
+   * answer and reuses it on retry.
+   *
+   * It is not an authorisation artifact and grants no exemption: answering
+   * the same item again with a NEW attemptId is legal, expected, and priced
+   * (Doc 2 B8 - re-grinding a not-due item pays 1L, which is "the only
+   * anti-farm mechanism; no access restrictions exist").
+   */
+  attemptId: z.string().uuid(),
 });
 export type SubmitAnswerRequest = z.infer<typeof submitAnswerRequestSchema>;
 
@@ -72,6 +83,11 @@ export const submitAnswerResponseSchema = z.object({
   correct: z.boolean(),
   grade: reviewGradeSchema,
   correctOptionIndex: z.number().int().nonnegative(),
+  /**
+   * The item's memory state as it is RIGHT NOW, not a snapshot as of the
+   * graded attempt. On a replayed request this is the live projection, which
+   * may already include a later legitimate answer to the same item.
+   */
   memoryState: itemMemoryStateSchema,
 });
 export type SubmitAnswerResponse = z.infer<typeof submitAnswerResponseSchema>;

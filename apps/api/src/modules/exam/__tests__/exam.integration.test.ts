@@ -264,6 +264,25 @@ describe('submitting a run', () => {
     expect(await prisma.reviewEvent.count({ where: { learnerId } })).toBe(4);
   });
 
+  it('records derived idempotency keys, not random ones', async () => {
+    const learnerId = randomUUID();
+    const run = await sitPartially(learnerId, 3, 0);
+    await submit(learnerId, run.runId);
+
+    const litres = await prisma.litreEvent.findMany({ where: { learnerId } });
+    const pumps = await prisma.flightEvent.findMany({
+      where: { learnerId, eventType: 'PUMP' },
+    });
+
+    // schema.prisma promises "idempotencyKey is unique -> pumps are
+    // idempotent". These assertions are what make that claim true rather than
+    // vacuous - a randomUUID() satisfies the constraint on every write.
+    expect(litres.every((e) => e.idempotencyKey.startsWith('exam-item:'))).toBe(true);
+    expect(litres.every((e) => e.idempotencyKey.endsWith(':litre'))).toBe(true);
+    expect(pumps).toHaveLength(1);
+    expect(pumps[0]!.idempotencyKey?.startsWith('exam-item:')).toBe(true);
+  });
+
   it('refuses to save an answer once submitted', async () => {
     const learnerId = randomUUID();
     const run = await sitPartially(learnerId, 1, 0);

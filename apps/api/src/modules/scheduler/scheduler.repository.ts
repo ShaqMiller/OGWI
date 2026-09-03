@@ -1,3 +1,4 @@
+import { litreEventDataForReview } from '../economy/economy.repository.js';
 import { prisma } from '../../lib/prisma.js';
 import type { PersistedCardFields } from './fsrs.util.js';
 
@@ -65,17 +66,119 @@ export async function upsertItemMemoryState(
   });
 }
 
-export async function recordReviewEvent(params: {
+export interface RecordedAnswer {
+  grade: 'AGAIN' | 'GOOD';
+  selectedOptionIndex: number | null;
+  renderingId: string | null;
+  pointsAwarded: number;
+}
+
+/** Looks up an already-recorded act, for replaying its result. */
+export async function findRecordedAnswer(idempotencyKey: string): Promise<RecordedAnswer | null> {
+  const [event, litre] = await Promise.all([
+    prisma.reviewEvent.findUnique({ where: { idempotencyKey } }),
+    prisma.litreEvent.findUnique({ where: { idempotencyKey: `${idempotencyKey}:litre` } }),
+  ]);
+
+  if (!event) return null;
+
+  return {
+    grade: event.grade,
+    selectedOptionIndex: event.selectedOptionIndex,
+    renderingId: event.renderingId,
+    // The litre row is the record of what this act paid. Reporting it on a
+    // replay lets a pump that was lost mid-request still complete.
+    pointsAwarded: litre?.amount ?? 0,
+  };
+}
+
+/**
+ * Writes one graded answer: the review event, the updated memory state, and
+ * the litre payment, atomically.
+ *
+ * The review-event insert is a CLAIM - `skipDuplicates` makes it
+ * `INSERT ... ON CONFLICT DO NOTHING`, so a concurrent duplicate reports
+ * `count: 0` rather than throwing. Race-safe by construction, the insert-side
+ * twin of examRepository.claimForGrading, and a count-flow rather than
+ * exception-flow like the rest of this codebase.
+ *
+ * Statement order is load-bearing: the claim goes FIRST, so a duplicate
+ * blocks on the unique index, resolves to 0, and aborts before touching
+ * ItemMemoryState at all. The transaction is also what makes the index
+ * sufficient - without it, a duplicate that lost the race would already have
+ * landed a stale memory-state upsert that nothing would roll back.
+ *
+ * Isolation is left at the Postgres default (READ COMMITTED). Unique-index
+ * enforcement doesn't depend on isolation level, and SERIALIZABLE would only
+ * add serialization failures that nothing here retries.
+ */
+export async function recordGradedAnswer(params: {
+  idempotencyKey: string;
   learnerId: string;
   knowledgeItemId: string;
   renderingId: string | null;
+  selectedOptionIndex: number | null;
   grade: 'AGAIN' | 'GOOD';
-  resultingDifficulty: number;
-  resultingStability: number;
-  resultingDue: Date;
+  resulting: PersistedCardFields;
   schedulerConfigVersion: string;
-}): Promise<void> {
-  await prisma.reviewEvent.create({ data: params });
+  litre: { amount: number; litreConfigVersion: string } | null;
+}): Promise<{ written: boolean }> {
+  return prisma.$transaction(async (tx) => {
+    const claim = await tx.reviewEvent.createMany({
+      data: [
+        {
+          idempotencyKey: params.idempotencyKey,
+          learnerId: params.learnerId,
+          knowledgeItemId: params.knowledgeItemId,
+          renderingId: params.renderingId,
+          selectedOptionIndex: params.selectedOptionIndex,
+          grade: params.grade,
+          resultingDifficulty: params.resulting.difficulty,
+          resultingStability: params.resulting.stability,
+          resultingDue: params.resulting.due,
+          schedulerConfigVersion: params.schedulerConfigVersion,
+        },
+      ],
+      skipDuplicates: true,
+    });
+
+    // Someone already recorded this act. Touch nothing else.
+    if (claim.count === 0) return { written: false };
+
+    await tx.itemMemoryState.upsert({
+      where: {
+        learnerId_knowledgeItemId: {
+          learnerId: params.learnerId,
+          knowledgeItemId: params.knowledgeItemId,
+        },
+      },
+      create: {
+        learnerId: params.learnerId,
+        knowledgeItemId: params.knowledgeItemId,
+        ...params.resulting,
+        schedulerConfigVersion: params.schedulerConfigVersion,
+      },
+      update: {
+        ...params.resulting,
+        schedulerConfigVersion: params.schedulerConfigVersion,
+      },
+    });
+
+    if (params.litre) {
+      // Economy owns the row's shape; this module only owns the sequencing.
+      await tx.litreEvent.create({
+        data: litreEventDataForReview({
+          idempotencyKey: `${params.idempotencyKey}:litre`,
+          learnerId: params.learnerId,
+          knowledgeItemId: params.knowledgeItemId,
+          amount: params.litre.amount,
+          litreConfigVersion: params.litre.litreConfigVersion,
+        }),
+      });
+    }
+
+    return { written: true };
+  });
 }
 
 /**

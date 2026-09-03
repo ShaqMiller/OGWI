@@ -1,5 +1,4 @@
 import {
-  LITRE_CONFIG_VERSION,
   POINTS_DUE_CORRECT,
   POINTS_FIRST_CORRECT,
   POINTS_INCORRECT,
@@ -34,23 +33,6 @@ export function priceReviewGrade(params: {
   if (!params.hadPriorState) return POINTS_FIRST_CORRECT;
   return params.wasDue ? POINTS_DUE_CORRECT : POINTS_NOT_DUE_CORRECT;
 }
-
-export async function awardForReview(
-  learnerId: string,
-  knowledgeItemId: string,
-  amount: number,
-): Promise<void> {
-  if (amount <= 0) return; // litres never subtract; zero-value events aren't worth logging
-
-  await economyRepository.recordLitreEvent({
-    learnerId,
-    knowledgeItemId,
-    source: 'QUIZ_ANSWER',
-    amount,
-    litreConfigVersion: LITRE_CONFIG_VERSION,
-  });
-}
-
 export async function getBalance(
   learnerId: string,
   qualificationId: string,

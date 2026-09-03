@@ -83,9 +83,17 @@ export async function pump(
   learnerId: string,
   qualificationId: string,
   amount: number,
+  idempotencyKey: string,
 ): Promise<FlightState> {
   if (amount <= 0) {
     // Litres never subtract, and a zero-value pump changes nothing.
+    return getFlightState(learnerId, qualificationId);
+  }
+
+  // Already pumped for this act. Checked before createFlight so a retry can
+  // never leave a stray empty flight behind; recordPump's unique-violation
+  // catch handles the genuinely concurrent case below.
+  if (await flightRepository.findPumpEventByKey(idempotencyKey)) {
     return getFlightState(learnerId, qualificationId);
   }
 
@@ -99,7 +107,10 @@ export async function pump(
   }
 
   const newFill = Math.min(ALTITUDE_CAP_FT, state.fill + amount);
-  await flightRepository.recordPump(flightId, learnerId, amount, now);
+  const recorded = await flightRepository.recordPump(flightId, learnerId, amount, now, idempotencyKey);
+
+  // Lost a race with an identical pump; the winner's state is the truth.
+  if (!recorded) return getFlightState(learnerId, qualificationId);
 
   let liftoffAt = state.liftoffAt;
   const crossedLiftoff = !state.isAirborne && newFill >= LIFTOFF_THRESHOLD_FT;

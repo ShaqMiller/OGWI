@@ -1,32 +1,40 @@
-import { randomUUID } from 'node:crypto';
 import { prisma } from '../../lib/prisma.js';
 
 /**
  * The only file in this module allowed to import the Prisma client.
  */
 
-export async function recordLitreEvent(params: {
+/**
+ * The row shape for litres paid on a graded answer.
+ *
+ * Pure - it builds the `data` object and does not write. The write happens
+ * inside scheduler.repository's transaction, so the review event, the memory
+ * state and the payment commit together or not at all. Economy still owns
+ * what a litre row LOOKS like; the scheduler only owns when it is issued.
+ *
+ * `idempotencyKey` is now derived from the learning act rather than a fresh
+ * randomUUID(). The old key satisfied the unique constraint on every call and
+ * therefore could never fire - the constraint was decorative. LitreEvent has
+ * no annulment or compensating-event model (unlike FlightEvent), and
+ * sumPointsForQualification blind-SUMs, so a duplicate that lands is
+ * permanently unfixable. This key is the only thing preventing that.
+ */
+export function litreEventDataForReview(params: {
+  idempotencyKey: string;
   learnerId: string;
   knowledgeItemId: string;
-  source: 'QUIZ_ANSWER';
   amount: number;
   litreConfigVersion: string;
-}): Promise<void> {
-  await prisma.litreEvent.create({
-    data: {
-      learnerId: params.learnerId,
-      knowledgeItemId: params.knowledgeItemId,
-      source: params.source,
-      amount: params.amount,
-      litreConfigVersion: params.litreConfigVersion,
-      effectiveAt: new Date(),
-      // No client-supplied request id exists yet to make this truly
-      // idempotent against a retried call - see the docs note on this
-      // module. A fresh key per write at least satisfies the DB's
-      // uniqueness guarantee structurally.
-      idempotencyKey: randomUUID(),
-    },
-  });
+}) {
+  return {
+    learnerId: params.learnerId,
+    knowledgeItemId: params.knowledgeItemId,
+    source: 'QUIZ_ANSWER' as const,
+    amount: params.amount,
+    litreConfigVersion: params.litreConfigVersion,
+    effectiveAt: new Date(),
+    idempotencyKey: params.idempotencyKey,
+  };
 }
 
 export async function sumPointsForQualification(

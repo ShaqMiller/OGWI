@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { POINTS_FIRST_CORRECT } from '@ogwi/shared';
+import { POINTS_FIRST_CORRECT, POINTS_NOT_DUE_CORRECT } from '@ogwi/shared';
 import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../../app.js';
@@ -51,11 +51,12 @@ beforeAll(async () => {
 
 const answer = (index: number) => ({ kind: 'option_index' as const, selectedOptionIndex: index });
 
-function submit(learnerId: string, body: object) {
+/** Defaults a fresh attemptId; pass one explicitly to simulate a retry. */
+function submit(learnerId: string, body: Record<string, unknown>) {
   return request(createApp())
     .post('/api/scheduler/answers')
     .set('x-dev-learner-id', learnerId)
-    .send(body);
+    .send({ attemptId: randomUUID(), ...body });
 }
 
 describe('POST /api/scheduler/answers', () => {
@@ -180,5 +181,141 @@ describe('POST /api/scheduler/reviews', () => {
       .send({ knowledgeItemId: item.knowledgeItemId, grade: 'good' });
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe('attempt idempotency', () => {
+  const counts = async (learnerId: string) => ({
+    reviews: await prisma.reviewEvent.count({ where: { learnerId } }),
+    litres: await prisma.litreEvent.count({ where: { learnerId } }),
+    pumps: await prisma.flightEvent.count({ where: { learnerId, eventType: 'PUMP' } }),
+  });
+
+  /**
+   * The scope boundary. Doc 2 B8 makes re-grinding a not-due item pay 1L and
+   * calls that "the only anti-farm mechanism; no access restrictions exist",
+   * and Doc 4 forbids policing the learner. Idempotency must therefore key on
+   * the ATTEMPT, never on the item - if this ever fails, someone has turned
+   * retry protection into the cooldown the spec rules out.
+   */
+  it('treats a new attemptId on the same item as a fresh, priced learning act', async () => {
+    const learnerId = randomUUID();
+    const item = items[0]!;
+    const body = {
+      knowledgeItemId: item.knowledgeItemId,
+      renderingId: item.renderingId,
+      answer: answer(item.correctOptionIndex),
+    };
+
+    await submit(learnerId, { ...body, attemptId: randomUUID() });
+    await submit(learnerId, { ...body, attemptId: randomUUID() });
+
+    expect((await counts(learnerId)).reviews).toBe(2);
+    const litres = await prisma.litreEvent.findMany({ where: { learnerId } });
+    expect(litres.reduce((sum, e) => sum + e.amount, 0)).toBe(
+      POINTS_FIRST_CORRECT + POINTS_NOT_DUE_CORRECT,
+    );
+  });
+
+  it('replays a retried attempt without writing anything new', async () => {
+    const learnerId = randomUUID();
+    const item = items[0]!;
+    const attemptId = randomUUID();
+    const body = {
+      attemptId,
+      knowledgeItemId: item.knowledgeItemId,
+      renderingId: item.renderingId,
+      answer: answer(item.correctOptionIndex),
+    };
+
+    const first = await submit(learnerId, body);
+    const afterFirst = await counts(learnerId);
+
+    const retry = await submit(learnerId, body);
+
+    expect(retry.status).toBe(200);
+    expect(retry.body).toEqual(first.body);
+    expect(await counts(learnerId)).toEqual(afterFirst);
+    // The FSRS card must not have been advanced a second time either.
+    const state = await prisma.itemMemoryState.findFirstOrThrow({ where: { learnerId } });
+    expect(state.reps).toBe(1);
+  });
+
+  it('refuses an attemptId reused for a different answer', async () => {
+    const learnerId = randomUUID();
+    const item = items[0]!;
+    const attemptId = randomUUID();
+    const base = {
+      attemptId,
+      knowledgeItemId: item.knowledgeItemId,
+      renderingId: item.renderingId,
+    };
+
+    await submit(learnerId, { ...base, answer: answer(item.correctOptionIndex) });
+    const res = await submit(learnerId, {
+      ...base,
+      answer: answer((item.correctOptionIndex + 1) % item.optionCount),
+    });
+
+    // Loud, not silent: quietly returning the first result would swallow the
+    // second answer, which is indistinguishable from a cooldown.
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('CONFLICT');
+    expect((await counts(learnerId)).reviews).toBe(1);
+  });
+
+  it('writes one set of rows when two identical requests race', async () => {
+    const learnerId = randomUUID();
+    const item = items[0]!;
+    const body = {
+      attemptId: randomUUID(),
+      knowledgeItemId: item.knowledgeItemId,
+      renderingId: item.renderingId,
+      answer: answer(item.correctOptionIndex),
+    };
+
+    const [a, b] = await Promise.all([submit(learnerId, body), submit(learnerId, body)]);
+
+    expect([a.status, b.status]).toEqual([200, 200]);
+    expect(a.body).toEqual(b.body);
+    expect(await counts(learnerId)).toEqual({ reviews: 1, litres: 1, pumps: 1 });
+  });
+
+  it('requires an attemptId', async () => {
+    const learnerId = randomUUID();
+    const item = items[0]!;
+
+    const res = await request(createApp())
+      .post('/api/scheduler/answers')
+      .set('x-dev-learner-id', learnerId)
+      .send({
+        knowledgeItemId: item.knowledgeItemId,
+        renderingId: item.renderingId,
+        answer: answer(0),
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    expect(await prisma.reviewEvent.count({ where: { learnerId } })).toBe(0);
+  });
+
+  it('records a derived idempotency key, not a random one', async () => {
+    const learnerId = randomUUID();
+    const item = items[0]!;
+
+    await submit(learnerId, {
+      knowledgeItemId: item.knowledgeItemId,
+      renderingId: item.renderingId,
+      answer: answer(item.correctOptionIndex),
+    });
+
+    const litre = await prisma.litreEvent.findFirstOrThrow({ where: { learnerId } });
+    const pump = await prisma.flightEvent.findFirstOrThrow({
+      where: { learnerId, eventType: 'PUMP' },
+    });
+
+    expect(litre.idempotencyKey.startsWith(`review:${learnerId}:`)).toBe(true);
+    expect(litre.idempotencyKey.endsWith(':litre')).toBe(true);
+    expect(pump.idempotencyKey?.endsWith(':pump')).toBe(true);
   });
 });

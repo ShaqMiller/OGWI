@@ -39,7 +39,7 @@ describe('gradeReview', () => {
     const learnerId = randomUUID();
     const [itemId] = itemIds;
 
-    const first = await schedulerService.gradeReview(learnerId, itemId!, 'good', null);
+    const first = await schedulerService.gradeReview(learnerId, itemId!, 'good', null, randomUUID());
     expect(first.reps).toBe(1);
     expect(first.stability).toBeGreaterThan(0);
     expect(first.due.getTime()).toBeGreaterThan(Date.now());
@@ -49,7 +49,7 @@ describe('gradeReview', () => {
     const learnerId = randomUUID();
     const [itemId] = itemIds;
 
-    const first = await schedulerService.gradeReview(learnerId, itemId!, 'good', null);
+    const first = await schedulerService.gradeReview(learnerId, itemId!, 'good', null, randomUUID());
 
     // A brand-new item's first Good graduates it out of FSRS's short-term
     // learning steps (verified directly against ts-fsrs: grading again
@@ -61,7 +61,7 @@ describe('gradeReview', () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(first.due.getTime() + THIRTY_DAYS_MS));
 
-    const second = await schedulerService.gradeReview(learnerId, itemId!, 'good', null);
+    const second = await schedulerService.gradeReview(learnerId, itemId!, 'good', null, randomUUID());
     expect(second.reps).toBe(2);
     expect(second.stability).toBeGreaterThan(first.stability);
     expect(second.due.getTime()).toBeGreaterThan(first.due.getTime());
@@ -71,8 +71,8 @@ describe('gradeReview', () => {
     const learnerId = randomUUID();
     const [goodItemId, againItemId] = itemIds;
 
-    const goodResult = await schedulerService.gradeReview(learnerId, goodItemId!, 'good', null);
-    const againResult = await schedulerService.gradeReview(learnerId, againItemId!, 'again', null);
+    const goodResult = await schedulerService.gradeReview(learnerId, goodItemId!, 'good', null, randomUUID());
+    const againResult = await schedulerService.gradeReview(learnerId, againItemId!, 'again', null, randomUUID());
 
     expect(goodResult.stability).toBeGreaterThan(againResult.stability);
   });
@@ -92,7 +92,7 @@ describe('getDueItems', () => {
     const learnerId = randomUUID();
     const [itemId] = itemIds;
 
-    await schedulerService.gradeReview(learnerId, itemId!, 'good', null);
+    await schedulerService.gradeReview(learnerId, itemId!, 'good', null, randomUUID());
     const due = await schedulerService.getDueItems(learnerId, qualificationId, itemIds.length);
 
     const stillNew = due.find((item) => item.knowledgeItemId === itemId && item.isNew);

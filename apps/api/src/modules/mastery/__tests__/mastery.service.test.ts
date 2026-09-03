@@ -38,7 +38,7 @@ describe('computeLiveModuleMastery', () => {
     const learnerId = randomUUID();
 
     for (const itemId of itemIds) {
-      await schedulerService.gradeReview(learnerId, itemId, 'good', null);
+      await schedulerService.gradeReview(learnerId, itemId, 'good', null, randomUUID());
     }
 
     const scores = await masteryService.computeLiveModuleMastery(learnerId, qualificationId);
@@ -53,7 +53,7 @@ describe('publishModuleMastery', () => {
     const learnerId = randomUUID();
 
     for (const itemId of itemIds) {
-      await schedulerService.gradeReview(learnerId, itemId, 'good', null);
+      await schedulerService.gradeReview(learnerId, itemId, 'good', null, randomUUID());
     }
 
     const scores = await masteryService.computeLiveModuleMastery(learnerId, qualificationId);

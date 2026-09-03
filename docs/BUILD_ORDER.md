@@ -172,16 +172,17 @@ nothing here blocks a merge.
         shipping the key there made every answer publicly readable, and the old
         `POST /api/scheduler/reviews` let any caller forge mastery, litres, altitude and pass
         odds by posting `grade: "good"`. That route is removed, not deprecated.
-        **Not built**: replay protection. Nothing stops re-submitting the same answer; after the
-        first correct one it pays `POINTS_NOT_DUE_CORRECT` (1) each time, with no cap — the same
-        exposure the old route had. The real fix is a request-scoped idempotency key, which
-        needs a unique index and should be designed together with the existing gap in
-        `economy.repository.ts` (where `idempotencyKey: randomUUID()` satisfies the constraint
-        without providing idempotency). This change enables it by producing a stable
-        `(learnerId, knowledgeItemId, renderingId)` tuple.
-        **Not stored**: which option the learner actually picked. `ReviewEvent` records the
-        grade, not the response. Add a narrow `selectedOptionIndex Int?` (never a `Json` blob —
-        invariant 11) when something reads it, e.g. a distractor-analysis report.
+        **Retry safety** is handled by a client-supplied `attemptId` on the request: the act key
+        `review:<learnerId>:<attemptId>` is stored on `ReviewEvent` under a unique index, and the
+        litre and pump rows derive from it, so a retried request returns the original result and
+        writes nothing new. `ReviewEvent.selectedOptionIndex` (the column deferred above) is what
+        makes a reused id carrying a *different* answer a loud 409 rather than a silent swallow.
+        **Deliberately NOT capped or cooled down**: answering the same item again with a new
+        `attemptId` is legal, expected and priced at 1L. Doc 2 B8 calls that pricing "the only
+        anti-farm mechanism; no access restrictions exist" and Doc 4 forbids policing the learner,
+        so idempotency keys on the ATTEMPT and never on the item. There is a test pinning exactly
+        this (`answers.integration.test.ts`, "treats a new attemptId on the same item as a fresh,
+        priced learning act") — if it ever fails, someone has built the cooldown the spec rules out.
       - A small set of reusable primitives (`components/ui/{Card,Button,Badge,ProgressBar}.tsx`)
         and CSS custom properties (`globals.css`) give every page a consistent look - still
         explicitly a placeholder to prove the backend works end to end, not a design; it will be

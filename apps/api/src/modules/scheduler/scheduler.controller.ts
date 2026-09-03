@@ -14,6 +14,7 @@ export async function submitAnswer(req: Request, res: Response): Promise<void> {
     body.knowledgeItemId,
     body.renderingId,
     body.answer,
+    body.attemptId,
   );
 
   res.status(200).json(result);

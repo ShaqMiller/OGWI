@@ -25,8 +25,8 @@ describe('grading a review awards points end to end', () => {
     const learnerId = randomUUID();
     const [first, second] = itemIds;
 
-    await schedulerService.gradeReview(learnerId, first!, 'good', null);
-    await schedulerService.gradeReview(learnerId, second!, 'again', null);
+    await schedulerService.gradeReview(learnerId, first!, 'good', null, randomUUID());
+    await schedulerService.gradeReview(learnerId, second!, 'again', null, randomUUID());
 
     const balance = await economyService.getBalance(learnerId, qualificationId);
     expect(balance.totalPoints).toBe(5); // 5 for the first-ever correct, 0 for the miss
@@ -36,7 +36,7 @@ describe('grading a review awards points end to end', () => {
     const learnerId = randomUUID();
     const [itemId] = itemIds;
 
-    await schedulerService.gradeReview(learnerId, itemId!, 'good', null);
+    await schedulerService.gradeReview(learnerId, itemId!, 'good', null, randomUUID());
     const recent = await economyService.getRecentEvents(learnerId, qualificationId, 10);
 
     expect(recent).toHaveLength(1);

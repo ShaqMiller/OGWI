@@ -39,7 +39,7 @@ describe('computeReadiness', () => {
     const learnerId = randomUUID();
 
     for (const itemId of itemIds) {
-      await schedulerService.gradeReview(learnerId, itemId, 'good', null);
+      await schedulerService.gradeReview(learnerId, itemId, 'good', null, randomUUID());
     }
 
     const result = await readinessService.computeReadiness(learnerId, qualificationId, passMark);
@@ -60,7 +60,7 @@ describe('computeReadiness', () => {
     const learnerId = randomUUID();
 
     for (const itemId of itemIds) {
-      await schedulerService.gradeReview(learnerId, itemId, 'good', null);
+      await schedulerService.gradeReview(learnerId, itemId, 'good', null, randomUUID());
     }
 
     for (let i = 0; i < 2; i += 1) {

@@ -13,6 +13,7 @@ import {
   type ReviewGradeInput,
 } from '@ogwi/shared';
 import type { ExamRunKind } from '@ogwi/shared';
+import * as clock from '../../lib/clock.js';
 import * as economyRepository from './economy.repository.js';
 
 /**
@@ -107,6 +108,7 @@ export async function awardExamPremium(params: {
     amount: params.amount,
     idempotencyKey: params.idempotencyKey,
     litreConfigVersion: LITRE_CONFIG_VERSION,
+    effectiveAt: clock.now(),
   });
 }
 

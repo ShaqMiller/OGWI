@@ -1,4 +1,5 @@
 import type { ActivitySlot, NextSession } from '@ogwi/shared';
+import * as clock from '../../lib/clock.js';
 import { liveRetrievability, type PersistedCardFields } from '../scheduler/fsrs.util.js';
 import * as schedulerService from '../scheduler/scheduler.service.js';
 import * as compositionRepository from './composition.repository.js';
@@ -91,7 +92,7 @@ export async function composeNextSession(
   learnerId: string,
   qualificationId: string,
 ): Promise<NextSession> {
-  const now = new Date();
+  const now = clock.now();
   const topics = await compositionRepository.findTopicsForQualification(qualificationId);
   const allIds = topics.flatMap(allItemIds);
   const states = await compositionRepository.findItemStates(learnerId, allIds);

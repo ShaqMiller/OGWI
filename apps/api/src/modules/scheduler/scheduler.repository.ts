@@ -119,6 +119,7 @@ export async function recordGradedAnswer(params: {
   renderingId: string | null;
   selectedOptionIndex: number | null;
   grade: 'AGAIN' | 'GOOD';
+  reviewedAt: Date;
   resulting: PersistedCardFields;
   schedulerConfigVersion: string;
   litre: { amount: number; litreConfigVersion: string; qualificationId: string } | null;
@@ -133,6 +134,7 @@ export async function recordGradedAnswer(params: {
           renderingId: params.renderingId,
           selectedOptionIndex: params.selectedOptionIndex,
           grade: params.grade,
+          reviewedAt: params.reviewedAt,
           resultingDifficulty: params.resulting.difficulty,
           resultingStability: params.resulting.stability,
           resultingDue: params.resulting.due,
@@ -174,6 +176,7 @@ export async function recordGradedAnswer(params: {
           qualificationId: params.litre.qualificationId,
           amount: params.litre.amount,
           litreConfigVersion: params.litre.litreConfigVersion,
+          effectiveAt: params.reviewedAt,
         }),
       });
     }

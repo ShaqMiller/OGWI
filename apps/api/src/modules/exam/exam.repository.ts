@@ -81,6 +81,7 @@ export async function createRun(params: {
   allottedSeconds: number;
   contentGraphVersion: string;
   passMark: number;
+  startedAt: Date;
   items: NewExamRunItem[];
 }): Promise<string> {
   const run = await prisma.examRun.create({
@@ -92,6 +93,9 @@ export async function createRun(params: {
       allottedSeconds: params.allottedSeconds,
       contentGraphVersion: params.contentGraphVersion,
       passMarkSnapshot: params.passMark,
+      // Explicit rather than the column default: secondsUsed subtracts it
+      // from submittedAt, and both must come from the same (test) clock.
+      startedAt: params.startedAt,
       items: { create: params.items },
     },
     select: { id: true },
@@ -166,6 +170,7 @@ export async function saveSelection(params: {
   learnerId: string;
   knowledgeItemId: string;
   selectedOptionIndex: number;
+  selectedAt: Date;
 }): Promise<boolean> {
   const result = await prisma.examRunItem.updateMany({
     where: {
@@ -173,7 +178,7 @@ export async function saveSelection(params: {
       knowledgeItemId: params.knowledgeItemId,
       examRun: { learnerId: params.learnerId, status: 'IN_PROGRESS' },
     },
-    data: { selectedOptionIndex: params.selectedOptionIndex, selectedAt: new Date() },
+    data: { selectedOptionIndex: params.selectedOptionIndex, selectedAt: params.selectedAt },
   });
 
   return result.count > 0;

@@ -8,6 +8,7 @@ import {
   type StartExamRunResponse,
 } from '@ogwi/shared';
 import { NotFoundError, ValidationError } from '../../errors/index.js';
+import * as clock from '../../lib/clock.js';
 import * as contentGraphService from '../content-graph/content-graph.service.js';
 import * as economyService from '../economy/economy.service.js';
 import * as flightService from '../flight/flight.service.js';
@@ -79,6 +80,7 @@ export async function startRun(
     allottedSeconds,
     contentGraphVersion: qualification.contentGraphVersion,
     passMark: qualification.passMark,
+    startedAt: clock.now(),
     items: order.map((question, position) => ({
       knowledgeItemId: question.knowledgeItemId,
       renderingId: renderingByItem.get(question.knowledgeItemId) as string,
@@ -163,6 +165,7 @@ export async function saveAnswer(
     learnerId,
     knowledgeItemId,
     selectedOptionIndex,
+    selectedAt: clock.now(),
   });
 
   // Lost a race with a concurrent submit between the read above and the write.
@@ -260,7 +263,7 @@ async function markAndFreeze(run: ExamRunRow): Promise<void> {
     correctCount,
     scoredCount,
     passed,
-    submittedAt: new Date(),
+    submittedAt: clock.now(),
   });
 }
 
@@ -276,7 +279,7 @@ async function markAndFreeze(run: ExamRunRow): Promise<void> {
  */
 async function writeEngineEvents(runId: string, learnerId: string): Promise<void> {
   const run = await loadRun(runId, learnerId);
-  const now = new Date();
+  const now = clock.now();
   let totalPoints = 0;
   let lastGradedItemId: string | null = null;
   let firstClaimedItemId: string | null = null;
@@ -365,7 +368,7 @@ export async function getResults(runId: string, learnerId: string): Promise<Exam
 
   const scoredCount = run.scoredCount ?? run.items.length;
   const correctCount = run.correctCount ?? 0;
-  const submittedAt = run.submittedAt ?? new Date();
+  const submittedAt = run.submittedAt ?? clock.now();
 
   // Read what this run actually paid rather than recomputing it: per-question
   // pricing depends on the memory state at the moment of each answer, which

@@ -7,6 +7,7 @@ import {
   type SubmittedAnswer,
 } from '@ogwi/shared';
 import { ConflictError, NotFoundError } from '../../errors/index.js';
+import * as clock from '../../lib/clock.js';
 import * as contentGraphService from '../content-graph/content-graph.service.js';
 import * as economyService from '../economy/economy.service.js';
 import * as flightService from '../flight/flight.service.js';
@@ -120,7 +121,7 @@ export async function gradeReviewDeferringPump(
   idempotencyKey: string,
   selectedOptionIndex: number | null = null,
 ): Promise<{ state: GradedItemState; pointsAwarded: number; qualificationId: string }> {
-  const now = new Date();
+  const now = clock.now();
   const existing = await schedulerRepository.findItemMemoryState(learnerId, knowledgeItemId);
 
   // Computed from the *pre-grading* state, before FSRS updates it - this is
@@ -151,6 +152,10 @@ export async function gradeReviewDeferringPump(
     renderingId,
     selectedOptionIndex,
     grade: grade === 'good' ? 'GOOD' : 'AGAIN',
+    // The same instant FSRS scheduled from, written explicitly: left to the
+    // column's @default(now()) it would be Postgres's clock, which the test
+    // clock can't move - and remediation's two-different-days rule reads it.
+    reviewedAt: now,
     resulting: persisted,
     schedulerConfigVersion: SCHEDULER_CONFIG_VERSION,
     litre: points > 0 ? { amount: points, litreConfigVersion: LITRE_CONFIG_VERSION, qualificationId } : null,
@@ -222,7 +227,7 @@ export async function getDueItems(
   qualificationId: string,
   limit: number,
 ): Promise<DueItem[]> {
-  const now = new Date();
+  const now = clock.now();
   const { dueStates, newItemIds } = await schedulerRepository.findDueItems(
     learnerId,
     qualificationId,

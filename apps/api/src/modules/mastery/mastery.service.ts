@@ -1,4 +1,5 @@
 import type { ModuleMastery } from '@ogwi/shared';
+import * as clock from '../../lib/clock.js';
 import { liveRetrievability, type PersistedCardFields } from '../scheduler/fsrs.util.js';
 import * as masteryRepository from './mastery.repository.js';
 
@@ -68,7 +69,7 @@ export async function computeLiveModuleMastery(
   qualificationId: string,
 ): Promise<{ moduleId: string; moduleName: string; liveScore: number }[]> {
   const modules = await masteryRepository.findModulesForQualification(qualificationId);
-  const now = new Date();
+  const now = clock.now();
 
   const allItemIds = modules.flatMap((m) => m.objectives.flatMap((o) => o.knowledgeItemIds));
   const [states, everCorrect] = await Promise.all([
@@ -104,7 +105,7 @@ export async function publishModuleMastery(
   moduleId: string,
   liveScore: number,
 ): Promise<number> {
-  const now = new Date();
+  const now = clock.now();
   const published = await masteryRepository.findPublishedRecord(learnerId, moduleId);
 
   let displayedScore: number;
@@ -112,12 +113,10 @@ export async function publishModuleMastery(
   if (!published || liveScore >= published.displayedScore) {
     displayedScore = liveScore;
   } else {
-    // Clamped at 0 because the two timestamps can come from different clocks:
-    // `now` is the Node process's, while lastPublishedAt is Postgres's on the
-    // row's first write (@default(now())). When Postgres lands a hair ahead,
-    // elapsed goes negative, decay goes negative, and a *decline* nudges the
-    // displayed score up - the opposite of what easing is for. Tiny (~1e-9)
-    // but real, and it made this path's test flaky.
+    // Clamped at 0 so easing can only ever move a decline DOWN. Both stamps
+    // now come from lib/clock, but a negative elapsed time once made a decline
+    // nudge the displayed score up (when lastPublishedAt came from Postgres's
+    // clock), and the clamp keeps that impossible.
     const elapsedDays = Math.max(
       0,
       (now.getTime() - published.lastPublishedAt.getTime()) / (1000 * 60 * 60 * 24),
@@ -126,7 +125,7 @@ export async function publishModuleMastery(
     displayedScore = published.displayedScore + decay * (liveScore - published.displayedScore);
   }
 
-  await masteryRepository.upsertPublishedScore(learnerId, moduleId, displayedScore);
+  await masteryRepository.upsertPublishedScore(learnerId, moduleId, displayedScore, now);
   return displayedScore;
 }
 

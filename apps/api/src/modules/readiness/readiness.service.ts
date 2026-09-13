@@ -8,6 +8,7 @@ import {
   READINESS_SIGMA_BASE,
   READINESS_SIGMA_FLOOR,
 } from '@ogwi/shared';
+import * as clock from '../../lib/clock.js';
 import * as masteryRepository from '../mastery/mastery.repository.js';
 import { mean, scoringRetrievability, weightedObjectiveMean } from '../mastery/mastery.service.js';
 import { resolveCertaintyBand } from './certainty-band.util.js';
@@ -43,7 +44,7 @@ export async function computeReadiness(
   qualificationId: string,
   passMark: number,
 ): Promise<ReadinessResult> {
-  const now = new Date();
+  const now = clock.now();
   const projectionDate = addDays(now, READINESS_PROJECTION_DAYS);
 
   const modules = await masteryRepository.findModulesForQualification(qualificationId);

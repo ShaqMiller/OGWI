@@ -1,4 +1,5 @@
 import { ALTITUDE_AWARD_CATALOG, ALTITUDE_CAP_FT, LIFTOFF_THRESHOLD_FT, type EarnedAward } from '@ogwi/shared';
+import * as clock from '../../lib/clock.js';
 import * as flightRepository from './flight.repository.js';
 import { replayFlightState } from './flight-state.util.js';
 import type { FlightState } from './flight.types.js';
@@ -50,7 +51,7 @@ export async function getFlightState(
     return { flightId: null, fill: 0, isAirborne: false, peak: 0, liftoffAt: null, justTouchedDown: false };
   }
 
-  const now = new Date();
+  const now = clock.now();
   const pumps = await flightRepository.findPumpEvents(flightId);
   const replayed = replayFlightState(pumps, now);
 
@@ -97,7 +98,7 @@ export async function pump(
     return getFlightState(learnerId, qualificationId);
   }
 
-  const now = new Date();
+  const now = clock.now();
   let state = await getFlightState(learnerId, qualificationId);
 
   let flightId = state.flightId;

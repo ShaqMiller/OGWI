@@ -106,16 +106,15 @@ export async function upsertPublishedScore(
   learnerId: string,
   moduleId: string,
   displayedScore: number,
+  publishedAt: Date,
 ): Promise<void> {
-  // Both paths stamp the time from the same clock as publishModuleMastery
-  // reads it. Leaving create to the column's @default(now()) meant the first
-  // write used Postgres's clock and every later comparison used Node's, so
-  // elapsed time could come out negative by a hair.
-  const now = new Date();
-
+  // Both paths take the time from the caller, which read it from the same
+  // clock publishModuleMastery compares against. Leaving create to the
+  // column's @default(now()) meant the first write used Postgres's clock and
+  // every later comparison used Node's.
   await prisma.publishedMastery.upsert({
     where: { learnerId_moduleId: { learnerId, moduleId } },
-    create: { learnerId, moduleId, displayedScore, lastPublishedAt: now },
-    update: { displayedScore, lastPublishedAt: now },
+    create: { learnerId, moduleId, displayedScore, lastPublishedAt: publishedAt },
+    update: { displayedScore, lastPublishedAt: publishedAt },
   });
 }

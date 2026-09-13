@@ -27,6 +27,7 @@ export function litreEventDataForReview(params: {
   qualificationId: string;
   amount: number;
   litreConfigVersion: string;
+  effectiveAt: Date;
 }) {
   return {
     learnerId: params.learnerId,
@@ -35,7 +36,7 @@ export function litreEventDataForReview(params: {
     source: 'QUIZ_ANSWER' as const,
     amount: params.amount,
     litreConfigVersion: params.litreConfigVersion,
-    effectiveAt: new Date(),
+    effectiveAt: params.effectiveAt,
     idempotencyKey: params.idempotencyKey,
   };
 }
@@ -93,6 +94,7 @@ export async function recordExamPremium(params: {
   amount: number;
   idempotencyKey: string;
   litreConfigVersion: string;
+  effectiveAt: Date;
 }): Promise<boolean> {
   try {
     await prisma.litreEvent.create({
@@ -103,7 +105,7 @@ export async function recordExamPremium(params: {
         source: 'ASSESSMENT',
         amount: params.amount,
         litreConfigVersion: params.litreConfigVersion,
-        effectiveAt: new Date(),
+        effectiveAt: params.effectiveAt,
         idempotencyKey: params.idempotencyKey,
       },
     });

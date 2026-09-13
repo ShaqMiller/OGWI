@@ -6,6 +6,7 @@ import {
   type GapQueueModule,
   type RemediationItem,
 } from '@ogwi/shared';
+import * as clock from '../../lib/clock.js';
 import * as contentGraphService from '../content-graph/content-graph.service.js';
 import * as adaptiveRepository from './adaptive.repository.js';
 import { deriveRemediationState } from './remediation.util.js';
@@ -65,7 +66,7 @@ export async function getWrongAnswerPool(
   qualificationId: string,
 ): Promise<RemediationItem[]> {
   const rows = await getRemediationRows(learnerId, qualificationId);
-  const now = Date.now();
+  const now = clock.now().getTime();
   const retestWindowMs = WRONG_ANSWER_POOL_RETEST_WINDOW_DAYS * DAY_MS;
 
   return rows
@@ -99,7 +100,7 @@ export async function getGapQueue(
     byModule.set(row.moduleId, group);
   }
 
-  const now = new Date();
+  const now = clock.now();
 
   return Array.from(byModule.entries()).map(([moduleId, moduleRows]) => {
     const oldestSignalAt = moduleRows.reduce<Date | null>((oldest, row) => {

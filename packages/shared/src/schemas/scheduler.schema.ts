@@ -91,3 +91,25 @@ export const submitAnswerResponseSchema = z.object({
   memoryState: itemMemoryStateSchema,
 });
 export type SubmitAnswerResponse = z.infer<typeof submitAnswerResponseSchema>;
+
+/** Which surface a review came from. `unknown` for rows written before acts carried keys. */
+export const reviewSourceSchema = z.enum(['practice', 'exam', 'unknown']);
+export type ReviewSource = z.infer<typeof reviewSourceSchema>;
+
+/**
+ * One line of the prediction-vs-outcome log (Doc 2 B4), the data scheduler
+ * accuracy is measured from.
+ */
+export const reviewLogEntrySchema = z.object({
+  knowledgeItemId: z.string().uuid(),
+  reviewedAt: z.coerce.date(),
+  source: reviewSourceSchema,
+  /**
+   * FSRS's predicted chance of recall at the moment of answering. Null when the
+   * item had never been reviewed - FSRS has no prediction for an unseen card.
+   */
+  predictedRetrievability: z.number().min(0).max(1).nullable(),
+  outcome: z.enum(['correct', 'incorrect']),
+  resultingDue: z.coerce.date(),
+});
+export type ReviewLogEntry = z.infer<typeof reviewLogEntrySchema>;

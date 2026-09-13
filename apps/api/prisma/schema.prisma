@@ -287,6 +287,14 @@ model ReviewEvent {
   // remediation day rule reads it, so it must move with the test clock.
   reviewedAt DateTime    @default(now())
 
+  // FSRS's predicted probability of recall at the moment of answering, from
+  // the state before this answer was graded - logged beside `grade` (the
+  // outcome) so scheduler accuracy can be measured (Doc 2 B4: "log every
+  // prediction-vs-outcome"). Null when the item had never been reviewed:
+  // FSRS has no prediction for an unseen card. Also null on rows written
+  // before this column existed - those predictions were never recorded.
+  predictedRetrievability Float?
+
   resultingDifficulty Float
   resultingStability  Float
   resultingDue        DateTime

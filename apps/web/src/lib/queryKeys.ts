@@ -31,6 +31,7 @@ export const queryKeys = {
   scheduler: {
     all: () => ['scheduler'] as const,
     due: (slug: string) => [...queryKeys.scheduler.all(), 'due', slug] as const,
+    reviewLog: (slug: string) => [...queryKeys.scheduler.all(), 'reviewLog', slug] as const,
   },
   adaptive: {
     all: () => ['adaptive'] as const,

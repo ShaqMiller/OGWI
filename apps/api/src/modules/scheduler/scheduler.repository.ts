@@ -120,6 +120,7 @@ export async function recordGradedAnswer(params: {
   selectedOptionIndex: number | null;
   grade: 'AGAIN' | 'GOOD';
   reviewedAt: Date;
+  predictedRetrievability: number | null;
   resulting: PersistedCardFields;
   schedulerConfigVersion: string;
   litre: { amount: number; litreConfigVersion: string; qualificationId: string } | null;
@@ -135,6 +136,7 @@ export async function recordGradedAnswer(params: {
           selectedOptionIndex: params.selectedOptionIndex,
           grade: params.grade,
           reviewedAt: params.reviewedAt,
+          predictedRetrievability: params.predictedRetrievability,
           resultingDifficulty: params.resulting.difficulty,
           resultingStability: params.resulting.stability,
           resultingDue: params.resulting.due,
@@ -182,6 +184,36 @@ export async function recordGradedAnswer(params: {
     }
 
     return { written: true };
+  });
+}
+
+export interface ReviewLogRow {
+  knowledgeItemId: string;
+  grade: 'AGAIN' | 'GOOD';
+  reviewedAt: Date;
+  predictedRetrievability: number | null;
+  resultingDue: Date;
+  idempotencyKey: string | null;
+}
+
+/** A learner's most recent review events in one qualification, newest first. */
+export async function findReviewLog(
+  learnerId: string,
+  qualificationId: string,
+  limit: number,
+): Promise<ReviewLogRow[]> {
+  return prisma.reviewEvent.findMany({
+    where: { learnerId, knowledgeItem: { objective: { topic: { module: { qualificationId } } } } },
+    orderBy: { reviewedAt: 'desc' },
+    take: limit,
+    select: {
+      knowledgeItemId: true,
+      grade: true,
+      reviewedAt: true,
+      predictedRetrievability: true,
+      resultingDue: true,
+      idempotencyKey: true,
+    },
   });
 }
 

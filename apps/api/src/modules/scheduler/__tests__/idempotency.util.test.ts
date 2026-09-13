@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { examItemActKey, litreKey, pumpKey, reviewActKey } from '../idempotency.util.js';
+import { actSource, examItemActKey, litreKey, pumpKey, reviewActKey } from '../idempotency.util.js';
 
 describe('idempotency keys', () => {
   it('scopes a practice attempt to its learner', () => {
@@ -34,5 +34,12 @@ describe('idempotency keys', () => {
   it('keeps practice and exam namespaces apart', () => {
     // An id colliding across namespaces must not collapse two acts into one.
     expect(examItemActKey('x').split(':')[0]).not.toBe(reviewActKey('l', 'x').split(':')[0]);
+  });
+
+  it('reads the source of an act back from its key', () => {
+    expect(actSource(reviewActKey('learner-a', 'attempt-1'))).toBe('practice');
+    expect(actSource(examItemActKey('item-1'))).toBe('exam');
+    expect(actSource(null)).toBe('unknown');
+    expect(actSource('something-else:1')).toBe('unknown');
   });
 });

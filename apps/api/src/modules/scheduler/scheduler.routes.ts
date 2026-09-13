@@ -1,7 +1,7 @@
 import { Router, type Router as RouterType } from 'express';
 import { learnerClock } from '../../middleware/learnerClock.js';
 import { requireLearner } from '../../middleware/requireLearner.js';
-import { getDueItems, submitAnswer } from './scheduler.controller.js';
+import { getDueItems, getReviewLog, submitAnswer } from './scheduler.controller.js';
 
 export const schedulerRouter: RouterType = Router();
 
@@ -21,3 +21,5 @@ schedulerRouter.use(requireLearner, learnerClock);
  */
 schedulerRouter.post('/answers', submitAnswer);
 schedulerRouter.get('/due', getDueItems);
+// The prediction-vs-outcome log (Doc 2 B4), newest first.
+schedulerRouter.get('/review-log', getReviewLog);

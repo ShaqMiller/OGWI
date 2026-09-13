@@ -10,23 +10,14 @@ import { useResetDemoLearner } from '@/hooks/dev/useResetDemoLearner';
 import { readDevLearnerCookie, writeDevLearnerCookie } from '@/lib/devLearner';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { formatUtc } from './format';
+import { RecentReviewsCard } from './RecentReviewsCard';
 
 const HOUR_S = 60 * 60;
 const DAY_S = 24 * HOUR_S;
 
 const muted = { color: 'var(--color-text-muted)', fontSize: '0.85rem' };
 const cardGap = { marginBottom: 'var(--space-4)' };
-
-function formatUtc(value: Date | string): string {
-  return new Date(value).toLocaleString('en-GB', {
-    timeZone: 'UTC',
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 function formatOffset(seconds: number): string {
   if (seconds === 0) return 'running on real time';
@@ -134,6 +125,8 @@ export function DevPanel({ defaultLearnerId }: { defaultLearnerId: string }) {
           {reset.isError && <p style={{ color: 'var(--color-danger)' }}>{reset.error.message}</p>}
         </Card>
       )}
+
+      {demoActive !== null && slug !== '' && <RecentReviewsCard slug={slug} />}
 
       {slug === '' && qualifications.isSuccess && <p>No qualifications are seeded.</p>}
     </div>

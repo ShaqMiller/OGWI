@@ -1,3 +1,5 @@
+import type { ReviewSource } from '@ogwi/shared';
+
 /**
  * Idempotency keys for the grading write path.
  *
@@ -51,4 +53,14 @@ export function pumpKey(actKey: string): string {
  */
 export function examRunPremiumKey(examRunId: string): string {
   return `exam-run:${examRunId}:premium`;
+}
+
+/**
+ * Which surface an act came from, read back from its key's namespace. Rows
+ * written before acts carried keys have none, and say so.
+ */
+export function actSource(idempotencyKey: string | null): ReviewSource {
+  if (idempotencyKey?.startsWith('review:')) return 'practice';
+  if (idempotencyKey?.startsWith('exam-item:')) return 'exam';
+  return 'unknown';
 }

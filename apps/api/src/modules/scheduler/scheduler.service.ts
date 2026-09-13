@@ -3,6 +3,7 @@ import {
   LITRE_CONFIG_VERSION,
   SCHEDULER_CONFIG_VERSION,
   type ReviewGradeInput,
+  type ReviewLogEntry,
   type SubmitAnswerResponse,
   type SubmittedAnswer,
 } from '@ogwi/shared';
@@ -12,7 +13,7 @@ import * as contentGraphService from '../content-graph/content-graph.service.js'
 import * as economyService from '../economy/economy.service.js';
 import * as flightService from '../flight/flight.service.js';
 import * as schedulerRepository from './scheduler.repository.js';
-import { pumpKey, reviewActKey } from './idempotency.util.js';
+import { actSource, pumpKey, reviewActKey } from './idempotency.util.js';
 import { fromCard, fsrsScheduler, gradeToRating, liveRetrievability, toCardInput } from './fsrs.util.js';
 import type { DueItem, GradedItemState } from './scheduler.types.js';
 
@@ -124,9 +125,20 @@ export async function gradeReviewDeferringPump(
   const now = clock.now();
   const existing = await schedulerRepository.findItemMemoryState(learnerId, knowledgeItemId);
 
-  // Computed from the *pre-grading* state, before FSRS updates it - this is
-  // what "due" meant at the moment the learner answered.
-  const wasDue = existing !== null && liveRetrievability(existing, now) <= DESIRED_RETENTION;
+  // FSRS's prediction for this answer: the chance of recall from the
+  // *pre-grading* state, at the moment of answering. Recorded beside the
+  // outcome (Doc 2 B4: "log every prediction-vs-outcome") and it is also what
+  // "due" meant when the learner answered.
+  //
+  // Null for a never-seen item - FSRS has no prediction for a card it has
+  // never scheduled. Not 0: "never-retrieved items score 0" is a mastery
+  // SCORING rule, and a 0 here would read as a confident prediction of failure
+  // and skew any accuracy measured from this log.
+  //
+  // For an exam answer, `now` is submit time rather than when the option was
+  // picked - the same instant FSRS schedules from.
+  const predictedRetrievability = existing ? liveRetrievability(existing, now) : null;
+  const wasDue = predictedRetrievability !== null && predictedRetrievability <= DESIRED_RETENTION;
 
   const cardInput = toCardInput(existing, now);
   const { card } = fsrsScheduler.next(cardInput, now, gradeToRating(grade));
@@ -156,6 +168,7 @@ export async function gradeReviewDeferringPump(
     // column's @default(now()) it would be Postgres's clock, which the test
     // clock can't move - and remediation's two-different-days rule reads it.
     reviewedAt: now,
+    predictedRetrievability,
     resulting: persisted,
     schedulerConfigVersion: SCHEDULER_CONFIG_VERSION,
     litre: points > 0 ? { amount: points, litreConfigVersion: LITRE_CONFIG_VERSION, qualificationId } : null,
@@ -239,4 +252,25 @@ export async function getDueItems(
     ...dueStates.map((s) => ({ knowledgeItemId: s.knowledgeItemId, due: s.due, isNew: false })),
     ...newItemIds.map((id) => ({ knowledgeItemId: id, due: null, isNew: true })),
   ];
+}
+
+/**
+ * The prediction-vs-outcome log (Doc 2 B4): each recent answer with what FSRS
+ * predicted beside what happened. Read-only; nothing here is recomputed.
+ */
+export async function getReviewLog(
+  learnerId: string,
+  qualificationId: string,
+  limit: number,
+): Promise<ReviewLogEntry[]> {
+  const rows = await schedulerRepository.findReviewLog(learnerId, qualificationId, limit);
+
+  return rows.map((row) => ({
+    knowledgeItemId: row.knowledgeItemId,
+    reviewedAt: row.reviewedAt,
+    source: actSource(row.idempotencyKey),
+    predictedRetrievability: row.predictedRetrievability,
+    outcome: row.grade === 'GOOD' ? 'correct' : 'incorrect',
+    resultingDue: row.resultingDue,
+  }));
 }

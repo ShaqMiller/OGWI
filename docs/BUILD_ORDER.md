@@ -19,6 +19,14 @@ nothing here blocks a merge.
       spec's "opener" — no remediation ladder, no full never-empty guarantee, since the
       adaptive engine and session composition don't exist yet). Verified against real FSRS
       output, not just types (see the scheduler tests).
+
+      **The FSRS release is now genuinely pinned.** `ts-fsrs` was declared as `^5.4.1` - a caret
+      range that would have accepted any 5.x - and the config ID `fsrs-default-1` named nothing.
+      The dependency is now exact (`5.4.1`), and `SCHEDULER_CONFIG` in `packages/shared` resolves
+      that ID to library, build (`v5.4.1 using FSRS-6.0`), retention, fuzz and short-term
+      settings. The scheduler is built FROM that object, so fuzz and short-term no longer ride on
+      library defaults, and `scheduler-config.test.ts` fails if the installed build ever drifts.
+      The ID is unchanged because the behaviour didn't change - it only became nameable.
 - [x] **3. Mastery layer** — `apps/api/src/modules/mastery/`: live score computed on demand
       from `ItemMemoryState` via the content-graph relations (never-reviewed items score 0,
       matching Doc 2 B1); published (kind-but-honest) score in `PublishedMastery`, jumping to

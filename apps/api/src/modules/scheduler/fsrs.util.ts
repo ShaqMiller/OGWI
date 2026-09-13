@@ -1,4 +1,4 @@
-import { DESIRED_RETENTION } from '@ogwi/shared';
+import { SCHEDULER_CONFIG } from '@ogwi/shared';
 import {
   createEmptyCard,
   fsrs,
@@ -11,12 +11,19 @@ import {
 } from 'ts-fsrs';
 
 /**
- * The one FSRS instance for the whole module, built from the library's
- * published default parameters (Doc 2 B4: "launch on FSRS's published
- * default parameters"). Per-learner parameter optimisation is explicitly
- * deferred in the handover, not built here.
+ * The one FSRS instance for the whole module, built from SCHEDULER_CONFIG
+ * (Doc 2 B4: "launch on FSRS's published default parameters"). Every option
+ * that affects scheduling is passed explicitly rather than inherited, so the
+ * running scheduler is exactly the configuration its version ID names.
+ * Per-learner parameter optimisation is deferred in the handover, not built.
  */
-export const fsrsScheduler = fsrs(generatorParameters({ request_retention: DESIRED_RETENTION }));
+export const fsrsScheduler = fsrs(
+  generatorParameters({
+    request_retention: SCHEDULER_CONFIG.requestRetention,
+    enable_fuzz: SCHEDULER_CONFIG.enableFuzz,
+    enable_short_term: SCHEDULER_CONFIG.enableShortTerm,
+  }),
+);
 
 const DB_TO_FSRS_STATE = {
   NEW: State.New,

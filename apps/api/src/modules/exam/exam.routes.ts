@@ -1,4 +1,5 @@
 import { Router, type Router as RouterType } from 'express';
+import { learnerClock } from '../../middleware/learnerClock.js';
 import { requireLearner } from '../../middleware/requireLearner.js';
 import {
   getExamPaper,
@@ -10,7 +11,7 @@ import {
 
 export const examRouter: RouterType = Router();
 
-examRouter.use(requireLearner);
+examRouter.use(requireLearner, learnerClock);
 
 /**
  * Exam runs (Doc 2 A5). Every route is scoped to the calling learner, and a

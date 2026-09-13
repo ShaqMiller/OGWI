@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { DEV_LEARNER_COOKIE, demoLearnerFromCookie } from '@/lib/devLearner';
 
 /**
  * BFF proxy only - no business logic. Forwards browser requests to the real
@@ -12,6 +13,19 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
 const DEV_LEARNER_ID = process.env.DEV_LEARNER_ID ?? 'dev-learner-1';
+const TEST_CLOCK_ENABLED = process.env.TEST_CLOCK_ENABLED === 'true';
+
+/**
+ * With the test clock on, the /dev page can switch the app to a demo learner
+ * through a cookie. Only demo ids are honoured (see lib/devLearner), so the
+ * cookie can never select a real learner's data.
+ */
+function resolveLearnerId(req: NextRequest): string {
+  const demoLearner = TEST_CLOCK_ENABLED
+    ? demoLearnerFromCookie(req.cookies.get(DEV_LEARNER_COOKIE)?.value)
+    : null;
+  return demoLearner ?? DEV_LEARNER_ID;
+}
 
 async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
   const targetUrl = `${API_URL}/api/${path.join('/')}${req.nextUrl.search}`;
@@ -21,7 +35,7 @@ async function proxy(req: NextRequest, path: string[]): Promise<NextResponse> {
     method: req.method,
     headers: {
       'content-type': req.headers.get('content-type') ?? 'application/json',
-      'x-dev-learner-id': DEV_LEARNER_ID,
+      'x-dev-learner-id': resolveLearnerId(req),
     },
     ...(isBodilessMethod ? {} : { body: await req.text() }),
   };

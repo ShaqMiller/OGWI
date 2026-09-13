@@ -19,6 +19,9 @@ export default defineConfig({
     environment: 'node',
     env: {
       NODE_ENV: 'test',
+      // The dev routes are exercised over HTTP; the flag-off case builds its
+      // own app with createApp({ testClockEnabled: false }).
+      TEST_CLOCK_ENABLED: 'true',
       DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://ogwi:ogwi@localhost:5432/ogwi_test',
     },
   },

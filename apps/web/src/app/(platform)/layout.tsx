@@ -42,6 +42,11 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
         <Link href="/oggi" style={linkStyle}>
           Oggi
         </Link>
+        {process.env.TEST_CLOCK_ENABLED === 'true' && (
+          <Link href="/dev" style={{ ...linkStyle, marginLeft: 'auto', color: 'var(--color-text-muted)' }}>
+            Dev
+          </Link>
+        )}
       </nav>
       <main style={{ padding: 'var(--space-5)' }}>{children}</main>
     </div>

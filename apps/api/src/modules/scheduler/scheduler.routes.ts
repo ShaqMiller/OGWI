@@ -1,10 +1,11 @@
 import { Router, type Router as RouterType } from 'express';
+import { learnerClock } from '../../middleware/learnerClock.js';
 import { requireLearner } from '../../middleware/requireLearner.js';
 import { getDueItems, submitAnswer } from './scheduler.controller.js';
 
 export const schedulerRouter: RouterType = Router();
 
-schedulerRouter.use(requireLearner);
+schedulerRouter.use(requireLearner, learnerClock);
 
 /**
  * POST /answers replaced POST /reviews, which accepted a client-computed

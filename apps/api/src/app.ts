@@ -12,6 +12,7 @@ import { requestLogger } from './middleware/requestLogger.js';
 import { adaptiveRouter } from './modules/adaptive/adaptive.routes.js';
 import { compositionRouter } from './modules/composition/composition.routes.js';
 import { contentGraphRouter } from './modules/content-graph/content-graph.routes.js';
+import { devRouter } from './modules/dev/dev.routes.js';
 import { economyRouter } from './modules/economy/economy.routes.js';
 import { examRouter } from './modules/exam/exam.routes.js';
 import { flightRouter } from './modules/flight/flight.routes.js';
@@ -21,7 +22,10 @@ import { readinessRouter } from './modules/readiness/readiness.routes.js';
 import { recallRouter } from './modules/recall/recall.routes.js';
 import { schedulerRouter } from './modules/scheduler/scheduler.routes.js';
 
-export function createApp(): Express {
+export function createApp(
+  options: { testClockEnabled?: boolean } = {},
+): Express {
+  const { testClockEnabled = env.TEST_CLOCK_ENABLED } = options;
   const app = express();
 
   app.use(cors({ origin: env.WEB_ORIGIN }));
@@ -39,6 +43,12 @@ export function createApp(): Express {
   app.use('/api/readiness', readinessRouter);
   app.use('/api/recall', recallRouter);
   app.use('/api/exam', examRouter);
+
+  // Dev and staging only. Not mounted otherwise, so the routes don't exist -
+  // and env.ts refuses TEST_CLOCK_ENABLED in production.
+  if (testClockEnabled) {
+    app.use('/api/dev', devRouter);
+  }
 
   // Error handler must be registered last.
   app.use(errorHandler);

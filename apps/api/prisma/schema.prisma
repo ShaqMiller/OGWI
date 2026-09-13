@@ -283,6 +283,8 @@ model ReviewEvent {
   idempotencyKey String? @unique
 
   grade      ReviewGrade
+  // Written explicitly from lib/clock (the default is only a fallback): the
+  // remediation day rule reads it, so it must move with the test clock.
   reviewedAt DateTime    @default(now())
 
   resultingDifficulty Float
@@ -360,7 +362,8 @@ model FlightEvent {
   // Physics time: when the event actually happened (may be backdated for
   // offline/late-syncing pumps).
   effectiveAt DateTime
-  // Record time: when this row was appended. Never mutated.
+  // Record time: when this row was appended. Never mutated. Deliberately the
+  // database's clock, not lib/clock - it is an audit stamp nothing reads.
   appendedAt  DateTime @default(now())
   // Monotonic append order, for deterministic tie-break on equal effectiveAt.
   sequence    BigInt   @default(autoincrement())
@@ -524,6 +527,7 @@ model ExamRun {
   questionCount   Int
   allottedSeconds Int
 
+  // Written explicitly from lib/clock; secondsUsed subtracts it from submittedAt.
   startedAt   DateTime  @default(now())
   submittedAt DateTime?
 
@@ -580,4 +584,23 @@ model ExamRunItem {
   @@unique([examRunId, position])
   @@unique([examRunId, knowledgeItemId])
   @@map("exam_run_items")
+}
+
+// ---------------------------------------------------------------------------
+// Test clock (apps/api/src/modules/dev/) - dev and staging only
+// ---------------------------------------------------------------------------
+//
+// How far a DEMO learner's clock runs ahead of real time, so day-scale rules
+// (remediation's two-different-days exit, due dates, mastery easing) can be
+// demonstrated live. Read once per request by middleware/learnerClock.ts and
+// applied through lib/clock.ts. Only ids starting "demo-" ever get a row, and
+// the routes that write it don't exist unless TEST_CLOCK_ENABLED is on.
+//
+// Forward-only: a clock that moved backwards would stamp new rows before ones
+// already written. Resetting deletes the demo learner's data along with this row.
+model LearnerClockOffset {
+  learnerId     String @id
+  offsetSeconds Int
+
+  @@map("learner_clock_offsets")
 }

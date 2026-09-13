@@ -118,3 +118,35 @@ export async function upsertPublishedScore(
     update: { displayedScore, lastPublishedAt: publishedAt },
   });
 }
+
+export async function findPublishedRecords(
+  learnerId: string,
+  moduleIds: string[],
+): Promise<Map<string, { displayedScore: number; lastPublishedAt: Date }>> {
+  if (moduleIds.length === 0) return new Map();
+
+  const rows = await prisma.publishedMastery.findMany({
+    where: { learnerId, moduleId: { in: moduleIds } },
+    select: { moduleId: true, displayedScore: true, lastPublishedAt: true },
+  });
+
+  return new Map(
+    rows.map((row) => [
+      row.moduleId,
+      { displayedScore: row.displayedScore, lastPublishedAt: row.lastPublishedAt },
+    ]),
+  );
+}
+
+/** When the learner last answered anything in this qualification, or null if never. */
+export async function findLastReviewedAt(
+  learnerId: string,
+  qualificationId: string,
+): Promise<Date | null> {
+  const result = await prisma.reviewEvent.aggregate({
+    where: { learnerId, knowledgeItem: { objective: { topic: { module: { qualificationId } } } } },
+    _max: { reviewedAt: true },
+  });
+
+  return result._max.reviewedAt;
+}

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQualification } from '@/hooks/content-graph/useQualification';
 import { useKnowledgeItemPrompt } from '@/hooks/content-graph/useKnowledgeItemPrompt';
 import { useMastery } from '@/hooks/mastery/useMastery';
+import { usePublishMastery } from '@/hooks/mastery/usePublishMastery';
 import { useNextSession } from '@/hooks/composition/useNextSession';
 import { useEconomyBalance } from '@/hooks/economy/useEconomyBalance';
 import { useSubmitAnswer } from '@/hooks/scheduler/useSubmitAnswer';
@@ -36,6 +37,21 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
   const submitAnswer = useSubmitAnswer(slug);
   const currentTopicId = nextSession.data?.currentTopic?.topicId ?? null;
   const topicKeyPoints = useTopicKeyPoints(currentTopicId);
+  const publishMastery = usePublishMastery(slug);
+  const { mutate: publish } = publishMastery;
+
+  // Finishing a topic is a session end (Doc 2 C4): composition moves on to the
+  // next topic, or reports the course complete, and mastery publishes. That and
+  // the End session button are the only things on this page that move the
+  // mastery bars - answering a question never does.
+  const previousTopicId = useRef<string | null>(null);
+  const sessionLoaded = nextSession.data !== undefined;
+  useEffect(() => {
+    if (!sessionLoaded) return;
+    const previous = previousTopicId.current;
+    previousTopicId.current = currentTopicId;
+    if (previous !== null && previous !== currentTopicId) publish();
+  }, [sessionLoaded, currentTopicId, publish]);
 
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
   // Tagged with the item it belongs to. onSuccess invalidates composition,
@@ -91,7 +107,15 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
       </div>
 
       <Card style={{ marginBottom: 'var(--space-4)' }}>
-        <h2 style={{ marginTop: 0 }}>Mastery</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ margin: 0 }}>Mastery</h2>
+          <Button variant="secondary" disabled={publishMastery.isPending} onClick={() => publish()}>
+            End session
+          </Button>
+        </div>
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+          Updates when you end a session or finish a topic.
+        </p>
         {mastery.isLoading && <p>Loading...</p>}
         {mastery.data?.map((m) => (
           <ModuleMasteryBar key={m.moduleId} mastery={m} />

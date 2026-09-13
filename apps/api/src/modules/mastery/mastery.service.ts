@@ -1,4 +1,4 @@
-import type { ModuleMastery } from '@ogwi/shared';
+import { MASTERY_ROLLOVER_IDLE_MINUTES, type ModuleMastery } from '@ogwi/shared';
 import * as clock from '../../lib/clock.js';
 import { liveRetrievability, type PersistedCardFields } from '../scheduler/fsrs.util.js';
 import * as masteryRepository from './mastery.repository.js';
@@ -130,27 +130,85 @@ export async function publishModuleMastery(
 }
 
 /**
- * Convenience for the API surface: computes live scores for every module in
- * a qualification and publishes each one, since there's no session-end
- * publish point yet (session composition doesn't exist). This is a scaffold
- * simplification, not the spec's real publish-point timing.
+ * Publishes every module in a qualification from live state - a publish point
+ * (Doc 2 C4). Called at session end, practice-run end and exam submit, and by
+ * the daily rollover below. Never by an ordinary read.
  */
-export async function getAndPublishQualificationMastery(
+export async function publishQualificationMastery(
+  learnerId: string,
+  qualificationId: string,
+): Promise<ModuleMastery[]> {
+  return publishLiveScores(learnerId, await computeLiveModuleMastery(learnerId, qualificationId));
+}
+
+async function publishLiveScores(
+  learnerId: string,
+  liveScores: { moduleId: string; moduleName: string; liveScore: number }[],
+): Promise<ModuleMastery[]> {
+  const results: ModuleMastery[] = [];
+  for (const module of liveScores) {
+    const displayedScore = await publishModuleMastery(learnerId, module.moduleId, module.liveScore);
+    results.push({ ...module, displayedScore });
+  }
+
+  return results;
+}
+
+/**
+ * Mastery as a learner sees it: live scores beside the last PUBLISHED value.
+ *
+ * This used to publish on every read, and the dashboard reads after every
+ * answer - so displayed mastery republished mid-activity, which Doc 2 C4
+ * forbids. A read now writes nothing (invariant 2), with one exception: the
+ * daily rollover, materialised here on first read rather than by a background
+ * job, the same way flight touchdown is.
+ */
+export async function getQualificationMastery(
   learnerId: string,
   qualificationId: string,
 ): Promise<ModuleMastery[]> {
   const liveScores = await computeLiveModuleMastery(learnerId, qualificationId);
+  const [published, lastReviewedAt] = await Promise.all([
+    masteryRepository.findPublishedRecords(learnerId, liveScores.map((module) => module.moduleId)),
+    masteryRepository.findLastReviewedAt(learnerId, qualificationId),
+  ]);
 
-  const results: ModuleMastery[] = [];
-  for (const module of liveScores) {
-    const displayedScore = await publishModuleMastery(learnerId, module.moduleId, module.liveScore);
-    results.push({
-      moduleId: module.moduleId,
-      moduleName: module.moduleName,
-      liveScore: module.liveScore,
-      displayedScore,
-    });
+  const publishTimes = [...published.values()].map((record) => record.lastPublishedAt.getTime());
+  const lastPublishedAt = publishTimes.length > 0 ? new Date(Math.max(...publishTimes)) : null;
+
+  if (isDailyRolloverDue({ lastPublishedAt, lastReviewedAt, now: clock.now() })) {
+    return publishLiveScores(learnerId, liveScores);
   }
 
-  return results;
+  return liveScores.map((module) => ({
+    ...module,
+    // Never published: nothing has reached a publish point to show yet.
+    displayedScore: published.get(module.moduleId)?.displayedScore ?? 0,
+  }));
+}
+
+/**
+ * Doc 2 C4's "one daily rollover during inactivity". Due when nothing has been
+ * published since the last UTC midnight, there is something to publish, and
+ * the learner hasn't answered for MASTERY_ROLLOVER_IDLE_MINUTES - so it can
+ * never land mid-activity. Publishing stamps lastPublishedAt, which is what
+ * keeps it to once a day.
+ *
+ * UTC rather than the learner's local midnight because no learner timezone
+ * exists yet - the same scaffold simplification as remediation's day rule.
+ */
+export function isDailyRolloverDue(params: {
+  lastPublishedAt: Date | null;
+  lastReviewedAt: Date | null;
+  now: Date;
+}): boolean {
+  const { lastPublishedAt, lastReviewedAt, now } = params;
+
+  if (lastReviewedAt === null) return false;
+  if (now.getTime() - lastReviewedAt.getTime() < MASTERY_ROLLOVER_IDLE_MINUTES * 60 * 1000) {
+    return false;
+  }
+
+  const startOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return lastPublishedAt === null || lastPublishedAt.getTime() < startOfToday;
 }

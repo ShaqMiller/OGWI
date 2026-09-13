@@ -2,9 +2,14 @@ import { z } from 'zod';
 
 /**
  * The honesty split (Doc 2 B1): liveScore is the instant, unsmoothed value
- * (what predictions must read); displayedScore is the kind-but-honest
- * published value shown to a learner, which only ever sits at-or-above
- * liveScore.
+ * (what predictions must read); displayedScore is the published value shown
+ * to a learner.
+ *
+ * displayedScore only changes at a publish point (Doc 2 C4) - session end,
+ * practice-run end, exam submit, or the daily rollover - never mid-activity.
+ * Between publish points it can sit BELOW live (a gain lands at the next
+ * publish) as well as above it (a decline eases over a 7-day half-life). A
+ * module that has never been published shows 0.
  */
 export const moduleMasterySchema = z.object({
   moduleId: z.string().uuid(),

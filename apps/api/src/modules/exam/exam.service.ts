@@ -12,6 +12,7 @@ import * as clock from '../../lib/clock.js';
 import * as contentGraphService from '../content-graph/content-graph.service.js';
 import * as economyService from '../economy/economy.service.js';
 import * as flightService from '../flight/flight.service.js';
+import * as masteryService from '../mastery/mastery.service.js';
 import {
   examItemActKey,
   examRunPremiumKey,
@@ -192,6 +193,11 @@ export async function submitRun(runId: string, learnerId: string): Promise<ExamR
 
   await writeEngineEvents(runId, learnerId);
   await awardCompletionPremium(runId, learnerId);
+
+  // Run end is a publish point (Doc 2 C4). After the engine writes, so it
+  // publishes what the paper did; a resumed submit republishes harmlessly,
+  // since easing over zero elapsed time changes nothing.
+  await masteryService.publishQualificationMastery(learnerId, run.qualificationId);
 
   return getResults(runId, learnerId);
 }

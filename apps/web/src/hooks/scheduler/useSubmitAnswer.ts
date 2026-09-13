@@ -20,11 +20,12 @@ import { queryKeys } from '@/lib/queryKeys';
  *     answer, which is the cooldown Doc 2 B8 forbids.
  * So: mint on mount, rotate on success only.
  *
- * Every graded answer changes mastery, the recommended next session and
- * the points balance (Doc 2 Part C4's publish-point idea, informally: a
- * graded answer is exactly the kind of moment that should refresh those
- * three). Scoped invalidation via the query-key factory, not a blanket
- * refetch-everything.
+ * Every graded answer changes the recommended next session, the points
+ * balance, due items and the flight, so those are refreshed. Displayed
+ * mastery deliberately is NOT: it only changes at a publish point (Doc 2 C4 -
+ * session end, practice-run end, exam submit, daily rollover), never
+ * mid-activity. See usePublishMastery. Scoped invalidation via the query-key
+ * factory, not a blanket refetch-everything.
  */
 function newAttemptId(): string {
   // crypto.randomUUID needs a secure context; plain-http LAN testing doesn't
@@ -40,7 +41,6 @@ export function useSubmitAnswer(qualificationSlug: string) {
   attemptIdRef.current ??= newAttemptId();
 
   function invalidateAll() {
-    queryClient.invalidateQueries({ queryKey: queryKeys.mastery.qualification(qualificationSlug) });
     queryClient.invalidateQueries({ queryKey: queryKeys.composition.next(qualificationSlug) });
     queryClient.invalidateQueries({ queryKey: queryKeys.economy.balance(qualificationSlug) });
     queryClient.invalidateQueries({ queryKey: queryKeys.economy.recent(qualificationSlug) });
@@ -48,6 +48,10 @@ export function useSubmitAnswer(qualificationSlug: string) {
     queryClient.invalidateQueries({
       queryKey: queryKeys.adaptive.wrongAnswerPool(qualificationSlug),
     });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.adaptive.remediationRecords(qualificationSlug),
+    });
+    queryClient.invalidateQueries({ queryKey: queryKeys.scheduler.reviewLog(qualificationSlug) });
     queryClient.invalidateQueries({ queryKey: queryKeys.flight.state(qualificationSlug) });
     queryClient.invalidateQueries({
       queryKey: queryKeys.readiness.qualification(qualificationSlug),

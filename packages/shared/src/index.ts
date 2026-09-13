@@ -20,3 +20,4 @@ export * from './constants/economy.constants.js';
 export * from './constants/awards.constants.js';
 export * from './constants/exam.constants.js';
 export * from './constants/dev.constants.js';
+export * from './constants/mastery.constants.js';

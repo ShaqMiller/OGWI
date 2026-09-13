@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useKnowledgeItemPrompt } from '@/hooks/content-graph/useKnowledgeItemPrompt';
+import { usePublishMastery } from '@/hooks/mastery/usePublishMastery';
 import { useSubmitAnswer } from '@/hooks/scheduler/useSubmitAnswer';
 import { MultipleChoiceOptions } from './MultipleChoiceOptions';
 
@@ -27,6 +28,19 @@ export function ItemQueueQuiz({
   // without the tag a late result could be painted onto the next question.
   const [marked, setMarked] = useState<{ itemId: string; correctOptionIndex: number } | null>(null);
   const submitAnswer = useSubmitAnswer(qualificationSlug);
+  const { mutate: publishMastery } = usePublishMastery(qualificationSlug);
+  const published = useRef(false);
+
+  const finished = itemIds.length > 0 && index >= itemIds.length;
+
+  // Finishing the batch is a publish point (Doc 2 C4: "Practice-run end") -
+  // the one moment mastery may move for this run. Once per run.
+  useEffect(() => {
+    if (finished && !published.current) {
+      published.current = true;
+      publishMastery();
+    }
+  }, [finished, publishMastery]);
 
   const currentItemId = itemIds[index] ?? null;
   const prompt = useKnowledgeItemPrompt(currentItemId);

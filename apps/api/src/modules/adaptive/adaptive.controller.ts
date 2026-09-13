@@ -13,6 +13,16 @@ export async function getWrongAnswerPool(req: Request, res: Response): Promise<v
   res.status(200).json(pool);
 }
 
+export async function getRemediationRecords(req: Request, res: Response): Promise<void> {
+  const { qualificationSlug } = adaptiveQuerySchema.parse(req.query);
+  const learnerId = req.learnerId as string;
+
+  const qualification = await contentGraphService.getQualificationBySlug(qualificationSlug);
+  const records = await adaptiveService.getRemediationRecords(learnerId, qualification.id);
+
+  res.status(200).json(records);
+}
+
 export async function getGapQueue(req: Request, res: Response): Promise<void> {
   const { qualificationSlug } = adaptiveQuerySchema.parse(req.query);
   const learnerId = req.learnerId as string;

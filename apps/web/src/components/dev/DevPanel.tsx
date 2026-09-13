@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { formatUtc } from './format';
 import { RecentReviewsCard } from './RecentReviewsCard';
+import { RemediationRecordsCard } from './RemediationRecordsCard';
 
 const HOUR_S = 60 * 60;
 const DAY_S = 24 * HOUR_S;
@@ -126,7 +127,12 @@ export function DevPanel({ defaultLearnerId }: { defaultLearnerId: string }) {
         </Card>
       )}
 
-      {demoActive !== null && slug !== '' && <RecentReviewsCard slug={slug} />}
+      {demoActive !== null && slug !== '' && (
+        <>
+          <RemediationRecordsCard slug={slug} />
+          <RecentReviewsCard slug={slug} />
+        </>
+      )}
 
       {slug === '' && qualifications.isSuccess && <p>No qualifications are seeded.</p>}
     </div>

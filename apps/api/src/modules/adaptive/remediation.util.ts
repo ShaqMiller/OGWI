@@ -1,5 +1,7 @@
 import { REMEDIATION_EXIT_CORRECT_COUNT } from '@ogwi/shared';
-import type { DerivedRemediationState, ReviewLite } from './adaptive.types.js';
+import type { DerivedRemediationState, QualifyingAnswer, ReviewLite } from './adaptive.types.js';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Derives remediation status entirely from an item's ReviewEvent history -
@@ -36,10 +38,15 @@ export function deriveRemediationState(
 ): DerivedRemediationState {
   let enteredAt: Date | null = null;
   let exitedAt: Date | null = null;
-  let qualifying: { renderingId: string | null; day: string }[] = [];
+  let againCount = 0;
+  let qualifying: QualifyingAnswer[] = [];
 
   for (const event of events) {
     if (event.grade === 'AGAIN') {
+      // A miss while already in remediation resets progress but belongs to the
+      // same episode; a miss after an exit (or the first ever) starts a new one.
+      const continuingEpisode = enteredAt !== null && exitedAt === null;
+      againCount = continuingEpisode ? againCount + 1 : 1;
       enteredAt = event.reviewedAt;
       exitedAt = null;
       qualifying = [];
@@ -50,7 +57,7 @@ export function deriveRemediationState(
     // resolved, carries no signal for this derivation.
     if (enteredAt === null || exitedAt !== null) continue;
 
-    const day = event.reviewedAt.toISOString().slice(0, 10);
+    const day = utcDay(event.reviewedAt);
     const sameDayAlready = qualifying.some((q) => q.day === day);
     if (sameDayAlready) continue;
 
@@ -60,11 +67,39 @@ export function deriveRemediationState(
       qualifying.some((q) => q.renderingId !== null && q.renderingId === event.renderingId);
     if (renderingConflict) continue;
 
-    qualifying.push({ renderingId: event.renderingId, day });
+    qualifying.push({ reviewedAt: event.reviewedAt, day, renderingId: event.renderingId });
     if (qualifying.length >= REMEDIATION_EXIT_CORRECT_COUNT) {
       exitedAt = event.reviewedAt;
     }
   }
 
-  return { inRemediation: enteredAt !== null && exitedAt === null, enteredAt, exitedAt };
+  const inRemediation = enteredAt !== null && exitedAt === null;
+  const lastQualifying = qualifying[qualifying.length - 1];
+
+  return {
+    inRemediation,
+    enteredAt,
+    exitedAt,
+    againCount,
+    qualifyingAnswers: qualifying,
+    correctAnswersNeeded:
+      enteredAt === null ? 0 : Math.max(0, REMEDIATION_EXIT_CORRECT_COUNT - qualifying.length),
+    // Everything below is what the loop already knew and used to throw away.
+    // A correct answer counts at once after a miss; after one has counted, the
+    // next can only count from the following UTC day.
+    nextQualifyingFrom: !inRemediation
+      ? null
+      : lastQualifying
+        ? startOfNextUtcDay(lastQualifying.day)
+        : enteredAt,
+    renderingDistinctnessEnforced: options.enforceRenderingDistinctness,
+  };
+}
+
+function utcDay(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function startOfNextUtcDay(day: string): Date {
+  return new Date(Date.parse(`${day}T00:00:00.000Z`) + DAY_MS);
 }

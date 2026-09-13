@@ -36,6 +36,8 @@ export const queryKeys = {
   adaptive: {
     all: () => ['adaptive'] as const,
     wrongAnswerPool: (slug: string) => [...queryKeys.adaptive.all(), 'wrongAnswerPool', slug] as const,
+    remediationRecords: (slug: string) =>
+      [...queryKeys.adaptive.all(), 'remediationRecords', slug] as const,
   },
   flight: {
     all: () => ['flight'] as const,

@@ -9,6 +9,7 @@ export interface ReviewEventWithModule {
   grade: 'AGAIN' | 'GOOD';
   reviewedAt: Date;
   renderingId: string | null;
+  idempotencyKey: string | null;
   moduleId: string;
   moduleName: string;
 }
@@ -25,6 +26,7 @@ export async function findReviewEventsForQualification(
       grade: true,
       reviewedAt: true,
       renderingId: true,
+      idempotencyKey: true,
       knowledgeItem: {
         select: {
           objective: {
@@ -46,6 +48,7 @@ export async function findReviewEventsForQualification(
     grade: row.grade,
     reviewedAt: row.reviewedAt,
     renderingId: row.renderingId,
+    idempotencyKey: row.idempotencyKey,
     moduleId: row.knowledgeItem.objective.topic.module.id,
     moduleName: row.knowledgeItem.objective.topic.module.name,
   }));

@@ -2,12 +2,15 @@ import {
   GAP_QUIZ_MAX_WAIT_DAYS,
   GAP_QUIZ_MIN_ITEMS,
   GAP_QUIZ_READY_LEAD_DAYS,
+  REMEDIATION_EXIT_CORRECT_COUNT,
   WRONG_ANSWER_POOL_RETEST_WINDOW_DAYS,
   type GapQueueModule,
+  type RemediationRecord,
   type RemediationItem,
 } from '@ogwi/shared';
 import * as clock from '../../lib/clock.js';
 import * as contentGraphService from '../content-graph/content-graph.service.js';
+import { actSource } from '../scheduler/idempotency.util.js';
 import * as adaptiveRepository from './adaptive.repository.js';
 import { deriveRemediationState } from './remediation.util.js';
 import type { ItemRemediationRow } from './adaptive.types.js';
@@ -50,10 +53,12 @@ async function getRemediationRows(
     if (state.enteredAt === null) continue; // never entered remediation - nothing to report
 
     const first = itemEvents[0]!;
+    const latestAgain = [...itemEvents].reverse().find((event) => event.grade === 'AGAIN');
     rows.push({
       knowledgeItemId,
       moduleId: first.moduleId,
       moduleName: first.moduleName,
+      source: actSource(latestAgain?.idempotencyKey ?? null),
       ...state,
     });
   }
@@ -120,4 +125,46 @@ export async function getGapQueue(
       readyDate: ready ? new Date(now.getTime() + GAP_QUIZ_READY_LEAD_DAYS * DAY_MS) : null,
     };
   });
+}
+
+/**
+ * The remediation record for every item that has ever entered remediation
+ * (Doc 2 B3): where the miss came from, when, and exactly how far the item is
+ * through the exit rule. Derived from the review log like everything else here
+ * - there is no record table to drift out of step with it.
+ *
+ * `rung` is always null: the format ladder needs rendering variants, which
+ * don't exist yet, and a made-up rung would be worse than an honest gap.
+ */
+export async function getRemediationRecords(
+  learnerId: string,
+  qualificationId: string,
+): Promise<RemediationRecord[]> {
+  const rows = await getRemediationRows(learnerId, qualificationId);
+
+  return rows
+    .map((row) => ({
+      knowledgeItemId: row.knowledgeItemId,
+      moduleId: row.moduleId,
+      moduleName: row.moduleName,
+      status: row.inRemediation ? ('in_remediation' as const) : ('exited' as const),
+      source: row.source,
+      enteredAt: row.enteredAt as Date,
+      exitedAt: row.exitedAt,
+      againCount: row.againCount,
+      qualifyingAnswers: row.qualifyingAnswers.map((answer) => ({
+        reviewedAt: answer.reviewedAt,
+        renderingId: answer.renderingId,
+      })),
+      correctAnswersRequired: REMEDIATION_EXIT_CORRECT_COUNT,
+      correctAnswersNeeded: row.correctAnswersNeeded,
+      nextQualifyingFrom: row.nextQualifyingFrom,
+      renderingDistinctnessEnforced: row.renderingDistinctnessEnforced,
+      rung: null,
+    }))
+    .sort(
+      (a, b) =>
+        Number(b.status === 'in_remediation') - Number(a.status === 'in_remediation') ||
+        b.enteredAt.getTime() - a.enteredAt.getTime(),
+    );
 }

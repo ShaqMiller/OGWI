@@ -102,7 +102,14 @@ still holds, and default to asking the user rather than enforcing it.
 
 ## What's actually built so far
 
-See `docs/BUILD_ORDER.md` for the step-by-step checklist and `docs/ARCHITECTURE.md` for the data
-model. Short version: monorepo scaffold, layering conventions, the content graph + mapping table
-schema, and schema-only skeletons for the flight event log / litre events / config versioning.
-No learner-facing behaviour, no scheduler/mastery/economy/physics logic yet.
+`docs/BUILD_ORDER.md` is the detailed, current record, including every simplification and what
+is still missing; `docs/ARCHITECTURE.md` covers the data model. Short version: the core engines
+exist in simplified form. That covers an FSRS scheduler (`ts-fsrs`, exact-pinned and named in
+`SCHEDULER_CONFIG`), mastery with live and published layers (an item only scores after its first
+correct answer), the adaptive remediation engine, session composition, the economy (including
+exam completion premiums), flight physics with altitude awards, and readiness odds whose
+confident certainty bands need exam-run evidence. Exam Simulation's core run is built, answers
+are checked server-side, and grading is retry-safe through a client-supplied `attemptId`. A
+plain placeholder UI is wired to real data. Still placeholders: Blurt/Teach Oggi marking is
+keyword overlap rather than AI, the Oggi chat is canned client-side replies with no backend, and
+content is demo seed data only.

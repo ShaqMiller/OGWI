@@ -8,6 +8,7 @@ import request from 'supertest';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../../../app.js';
 import { prisma } from '../../../lib/prisma.js';
+import * as economyService from '../../economy/economy.service.js';
 
 /**
  * Exam runs end to end. The two assertions that matter most are the key-leak
@@ -285,6 +286,32 @@ describe('submitting a run', () => {
     expect(premium?.amount).toBe(PREMIUM_EXAM_SIMULATION);
     // Paid for the RUN, not for any one question.
     expect(premium?.knowledgeItemId).toBeNull();
+  });
+
+  it('counts the premium in the points balance and the Recent list', async () => {
+    const learnerId = randomUUID();
+    const demoCert = await prisma.qualification.findUniqueOrThrow({ where: { slug: 'demo-cert' } });
+    const otherQualification = await prisma.qualification.findUniqueOrThrow({
+      where: { slug: 'demo-pm-basics' },
+    });
+    const run = await sitPartially(learnerId, DEMO_CERT_ITEM_COUNT, 0);
+
+    await submit(learnerId, run.runId);
+
+    // Through the queries the app actually reads, not a raw sum of litre rows.
+    // The premium tests above summed rows directly - which is how a balance
+    // that silently dropped every premium shipped unnoticed.
+    const balance = await economyService.getBalance(learnerId, demoCert.id);
+    expect(balance.totalPoints).toBe(DEMO_CERT_ITEM_COUNT * POINTS_FIRST_CORRECT + PREMIUM_EXAM_SIMULATION);
+
+    const recent = await economyService.getRecentEvents(learnerId, demoCert.id, 20);
+    expect(recent.find((event) => event.source === 'ASSESSMENT')).toMatchObject({
+      amount: PREMIUM_EXAM_SIMULATION,
+      knowledgeItemId: null,
+    });
+
+    // ...and scoped to its own qualification, never leaking into another's.
+    expect((await economyService.getBalance(learnerId, otherQualification.id)).totalPoints).toBe(0);
   });
 
   it('withholds the premium when too little of the paper was answered', async () => {

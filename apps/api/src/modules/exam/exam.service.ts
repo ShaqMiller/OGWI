@@ -214,6 +214,7 @@ async function awardCompletionPremium(runId: string, learnerId: string): Promise
 
   const paid = await economyService.awardExamPremium({
     learnerId,
+    qualificationId: run.qualificationId,
     amount,
     idempotencyKey: examRunPremiumKey(runId),
   });

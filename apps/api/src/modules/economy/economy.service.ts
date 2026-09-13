@@ -95,6 +95,7 @@ export function priceExamPremium(params: {
 /** Records a run's completion premium. Idempotent via the supplied key. */
 export async function awardExamPremium(params: {
   learnerId: string;
+  qualificationId: string;
   amount: number;
   idempotencyKey: string;
 }): Promise<boolean> {
@@ -102,6 +103,7 @@ export async function awardExamPremium(params: {
 
   return economyRepository.recordExamPremium({
     learnerId: params.learnerId,
+    qualificationId: params.qualificationId,
     amount: params.amount,
     idempotencyKey: params.idempotencyKey,
     litreConfigVersion: LITRE_CONFIG_VERSION,

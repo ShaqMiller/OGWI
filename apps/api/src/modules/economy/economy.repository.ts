@@ -24,12 +24,14 @@ export function litreEventDataForReview(params: {
   idempotencyKey: string;
   learnerId: string;
   knowledgeItemId: string;
+  qualificationId: string;
   amount: number;
   litreConfigVersion: string;
 }) {
   return {
     learnerId: params.learnerId,
     knowledgeItemId: params.knowledgeItemId,
+    qualificationId: params.qualificationId,
     source: 'QUIZ_ANSWER' as const,
     amount: params.amount,
     litreConfigVersion: params.litreConfigVersion,
@@ -43,7 +45,10 @@ export async function sumPointsForQualification(
   qualificationId: string,
 ): Promise<number> {
   const result = await prisma.litreEvent.aggregate({
-    where: { learnerId, knowledgeItem: { objective: { topic: { module: { qualificationId } } } } },
+    // By the row's own qualification, never through its knowledge item: an
+    // exam completion premium has no knowledge item, so joining through one
+    // dropped every premium from the balance.
+    where: { learnerId, qualificationId },
     _sum: { amount: true },
   });
 
@@ -63,7 +68,8 @@ export async function findRecentEvents(
   limit: number,
 ): Promise<RecentLitreEvent[]> {
   return prisma.litreEvent.findMany({
-    where: { learnerId, knowledgeItem: { objective: { topic: { module: { qualificationId } } } } },
+    // Same reason as the balance: premiums have no knowledge item to join through.
+    where: { learnerId, qualificationId },
     orderBy: { effectiveAt: 'desc' },
     take: limit,
     select: { amount: true, source: true, knowledgeItemId: true, effectiveAt: true },
@@ -83,6 +89,7 @@ export async function findRecentEvents(
  */
 export async function recordExamPremium(params: {
   learnerId: string;
+  qualificationId: string;
   amount: number;
   idempotencyKey: string;
   litreConfigVersion: string;
@@ -92,6 +99,7 @@ export async function recordExamPremium(params: {
       data: {
         learnerId: params.learnerId,
         knowledgeItemId: null,
+        qualificationId: params.qualificationId,
         source: 'ASSESSMENT',
         amount: params.amount,
         litreConfigVersion: params.litreConfigVersion,

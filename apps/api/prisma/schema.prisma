@@ -433,11 +433,23 @@ model LitreEvent {
   knowledgeItem   KnowledgeItem? @relation(fields: [knowledgeItemId], references: [id])
   idempotencyKey  String         @unique
 
+  // Which qualification's economy this payment belongs to. Required, and
+  // written on every row, because a balance is per qualification and not every
+  // payment is for a question: an exam completion premium has no knowledge
+  // item. The balance and Recent queries used to reach the qualification
+  // THROUGH the knowledge item, so every premium silently vanished from both -
+  // a learner holding 120L was shown 20 points.
+  // A bare id, like Flight.qualificationId: ledger rows must outlive content
+  // edits, and the optional knowledge-item relation above defaults to SetNull,
+  // which would otherwise drop a row out of every balance.
+  qualificationId String
+
   litreConfigVersion String
   effectiveAt        DateTime
   createdAt          DateTime @default(now())
 
   @@index([learnerId, effectiveAt])
+  @@index([learnerId, qualificationId])
   @@map("litre_events")
 }
 

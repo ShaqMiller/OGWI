@@ -119,7 +119,7 @@ export async function gradeReviewDeferringPump(
   renderingId: string | null,
   idempotencyKey: string,
   selectedOptionIndex: number | null = null,
-): Promise<{ state: GradedItemState; pointsAwarded: number }> {
+): Promise<{ state: GradedItemState; pointsAwarded: number; qualificationId: string }> {
   const now = new Date();
   const existing = await schedulerRepository.findItemMemoryState(learnerId, knowledgeItemId);
 
@@ -133,6 +133,15 @@ export async function gradeReviewDeferringPump(
 
   const points = economyService.priceReviewGrade({ hadPriorState: existing !== null, wasDue, grade });
 
+  // Resolved before the write so the litre row can carry its qualification -
+  // a balance is per qualification, and a payment that couldn't name one would
+  // be invisible in it.
+  const qualificationId =
+    await contentGraphService.getQualificationIdForKnowledgeItem(knowledgeItemId);
+  if (!qualificationId) {
+    throw new NotFoundError(`Knowledge item "${knowledgeItemId}" does not belong to a qualification`);
+  }
+
   // Everything above is pure or a read; every write happens in here, in one
   // transaction, so a duplicate that loses the claim leaves nothing behind.
   const { written } = await schedulerRepository.recordGradedAnswer({
@@ -144,7 +153,7 @@ export async function gradeReviewDeferringPump(
     grade: grade === 'good' ? 'GOOD' : 'AGAIN',
     resulting: persisted,
     schedulerConfigVersion: SCHEDULER_CONFIG_VERSION,
-    litre: points > 0 ? { amount: points, litreConfigVersion: LITRE_CONFIG_VERSION } : null,
+    litre: points > 0 ? { amount: points, litreConfigVersion: LITRE_CONFIG_VERSION, qualificationId } : null,
   });
 
   if (!written) {
@@ -156,10 +165,11 @@ export async function gradeReviewDeferringPump(
     return {
       state: { knowledgeItemId, ...(priorState ?? persisted) },
       pointsAwarded: recorded?.pointsAwarded ?? 0,
+      qualificationId,
     };
   }
 
-  return { state: { knowledgeItemId, ...persisted }, pointsAwarded: points };
+  return { state: { knowledgeItemId, ...persisted }, pointsAwarded: points, qualificationId };
 }
 
 export async function gradeReview(
@@ -170,7 +180,7 @@ export async function gradeReview(
   idempotencyKey: string,
   selectedOptionIndex: number | null = null,
 ): Promise<GradedItemState> {
-  const { state, pointsAwarded } = await gradeReviewDeferringPump(
+  const { state, pointsAwarded, qualificationId } = await gradeReviewDeferringPump(
     learnerId,
     knowledgeItemId,
     grade,
@@ -182,12 +192,9 @@ export async function gradeReview(
   // Litres and flight fill are the same currency (Doc 2 B9 builds on B8's
   // source-itemised litre events) - every earned point pumps the flight.
   if (pointsAwarded > 0) {
-    await pumpForKnowledgeItem(
-      learnerId,
-      knowledgeItemId,
-      pointsAwarded,
-      pumpKey(idempotencyKey),
-    );
+    // The qualification is already resolved, so pump directly rather than
+    // looking it up a second time.
+    await flightService.pump(learnerId, qualificationId, pointsAwarded, pumpKey(idempotencyKey));
   }
 
   return state;

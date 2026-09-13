@@ -121,7 +121,7 @@ export async function recordGradedAnswer(params: {
   grade: 'AGAIN' | 'GOOD';
   resulting: PersistedCardFields;
   schedulerConfigVersion: string;
-  litre: { amount: number; litreConfigVersion: string } | null;
+  litre: { amount: number; litreConfigVersion: string; qualificationId: string } | null;
 }): Promise<{ written: boolean }> {
   return prisma.$transaction(async (tx) => {
     const claim = await tx.reviewEvent.createMany({
@@ -171,6 +171,7 @@ export async function recordGradedAnswer(params: {
           idempotencyKey: `${params.idempotencyKey}:litre`,
           learnerId: params.learnerId,
           knowledgeItemId: params.knowledgeItemId,
+          qualificationId: params.litre.qualificationId,
           amount: params.litre.amount,
           litreConfigVersion: params.litre.litreConfigVersion,
         }),

@@ -241,6 +241,16 @@ nothing here blocks a merge.
       per-question litres are still paid — only the completion bonus is withheld. A full 8-question
       demo run pays 90L (8×5 + 50); the spec's ~150–200L assumes a 30-question paper.
 
+      **Balance bug, found and fixed.** As first shipped, premiums were paid but never counted:
+      the points balance and the Recent list reached a litre row's qualification *through its
+      knowledge item*, and a premium has none. A learner holding 120L - 20L of answers plus two
+      50L premiums - was shown 20 points. Every `LitreEvent` now carries a required
+      `qualificationId` (migration `litre_event_qualification`: backfills per-question litres
+      through the content graph and premiums through the exam run named in their key, then sets
+      NOT NULL, so a payment that can't name its qualification cannot exist). The premium tests
+      had summed raw litre rows, which is how it slipped through; a test now reads the balance
+      and Recent list through the real queries.
+
       **Not built**: the pausable timer, per-question flagging, the question-navigation panel,
       pause/resume and jump-back-in, attempt history, and the mini-mock and first-mock-invitation
       kinds (the invitation threshold is Open Decision #2 and undecided). `startedAt` is set at run

@@ -32,6 +32,18 @@ const CERTAINTY_NEXT_STEP = {
 } as const;
 
 /**
+ * "2026-09-23" -> "23 Sep". Read as UTC so the day can't shift across a
+ * timezone boundary.
+ */
+function formatShortDate(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+}
+
+/**
  * One qualification's progress summary. A separate component (rather than
  * inline in the Progress page's list) so each card can call its own hooks
  * for its own slug - hooks can't be called in a loop at the page level.
@@ -73,6 +85,20 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
       {mastery.data?.length === 0 && <p>No modules yet.</p>}
       {mastery.data?.map((m) => <ModuleMasteryBar key={m.moduleId} mastery={m} />)}
 
+      {/*
+        A forecast of working through the material, NOT of being ready to pass.
+        It lives with the coverage bars rather than under the odds of passing,
+        because under the odds it read as a "ready by" date - which the
+        client's decision log rejects. Readiness itself has no date.
+      */}
+      {readiness.data?.forecast.expectedFinishDate &&
+        readiness.data.forecast.itemsRemaining > 0 && (
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: 'var(--space-2) 0 0' }}>
+            At this pace you&apos;ll have worked through the whole course by around{' '}
+            {formatShortDate(readiness.data.forecast.expectedFinishDate)}.
+          </p>
+        )}
+
       {readiness.data && (
         <div style={{ marginTop: 'var(--space-3)', fontSize: '0.9rem' }}>
           {readiness.data.withheld ? (
@@ -92,11 +118,6 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
                 </div>
               )}
             </>
-          )}
-          {readiness.data.forecast.expectedFinishDate && (
-            <div style={{ color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
-              At your current pace: finished around {readiness.data.forecast.expectedFinishDate}
-            </div>
           )}
         </div>
       )}

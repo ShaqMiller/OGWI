@@ -140,7 +140,9 @@ nothing here blocks a merge.
       exported from `mastery.service.ts` and reused, not duplicated), a coverage-based σ, and
       `P(pass) = Φ((μ − passMark) / σ)`. Odds are withheld below 20% (the spec's "climb frame").
       A forecast (expected finish date) comes from an exponentially-weighted pace over the
-      trailing 28 days of `ReviewEvent` history. `Qualification.passMark` is a new column
+      trailing 28 days of `ReviewEvent` history. It forecasts *working through the material*, not
+      being ready to pass, and is shown beside the mastery bars rather than under the odds - under
+      the odds it read as a "ready by" date, which the client's decision log rejects. `Qualification.passMark` is a new column
       (migration `qualification_pass_mark`; demo content seeded at 0.70 / 0.65 — placeholders,
       not researched). `GET /api/readiness/:qualificationSlug`. **Two deliberate deviations from
       the spec, both because no exam/mock system exists**: certainty bands (`early`/`fair`/
@@ -165,8 +167,9 @@ nothing here blocks a merge.
       - `app/(platform)/page.tsx` - qualification picker.
       - `.../qualifications/[slug]/page.tsx` - mastery bars, points, "next up", a
         click-through multiple-choice quiz driven by composition's live next-item.
-      - `.../progress/page.tsx` - mastery, points, live altitude, and the readiness "odds of
-        passing" + forecast date, all per qualification
+      - `.../progress/page.tsx` - mastery, points, live altitude, the readiness "odds of
+        passing", and a coverage forecast ("worked through the whole course by around X"),
+        all per qualification
         (`components/progress/QualificationProgressCard.tsx`). Not built: the completion %
         figure itself (distinct from the forecast date, which *is* built).
       - `.../practice/page.tsx` - the "Recommended" section only

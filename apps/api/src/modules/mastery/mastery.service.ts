@@ -1,5 +1,5 @@
 import type { ModuleMastery } from '@ogwi/shared';
-import { liveRetrievability } from '../scheduler/fsrs.util.js';
+import { liveRetrievability, type PersistedCardFields } from '../scheduler/fsrs.util.js';
 import * as masteryRepository from './mastery.repository.js';
 
 /**
@@ -38,6 +38,31 @@ export function weightedObjectiveMean(
   );
 }
 
+/**
+ * An item's contribution to mastery at `at`. Doc 2 B1: "item mastery simply is
+ * that item's current R, and an item only enters scoring at its first correct
+ * retrieval".
+ *
+ * The gate is not a formality. FSRS resets retrievability to 1.0 on ANY review,
+ * so scoring R alone made a WRONG first answer read as fully known - measured
+ * at R 1.000 immediately and 0.766 a day later. Getting a question wrong raised
+ * mastery, and raised the odds of passing with it.
+ *
+ * Once an item has been answered correctly it scores its live R from then on,
+ * including after later wrong answers. That later fall is exactly the permitted
+ * decline (invariant 6: "a failed previously-known item").
+ *
+ * Shared with readiness, so the two can never disagree about which items count.
+ */
+export function scoringRetrievability(
+  state: PersistedCardFields | null,
+  everAnsweredCorrectly: boolean,
+  at: Date,
+): number {
+  if (!everAnsweredCorrectly) return 0;
+  return liveRetrievability(state, at);
+}
+
 export async function computeLiveModuleMastery(
   learnerId: string,
   qualificationId: string,
@@ -46,14 +71,17 @@ export async function computeLiveModuleMastery(
   const now = new Date();
 
   const allItemIds = modules.flatMap((m) => m.objectives.flatMap((o) => o.knowledgeItemIds));
-  const states = await masteryRepository.findItemMemoryStates(learnerId, allItemIds);
+  const [states, everCorrect] = await Promise.all([
+    masteryRepository.findItemMemoryStates(learnerId, allItemIds),
+    masteryRepository.findItemsEverAnsweredCorrectly(learnerId, allItemIds),
+  ]);
 
   return modules.map((module) => {
     const objectiveScores = module.objectives.map((objective) => ({
       subWeight: objective.subWeight,
       score: mean(
         objective.knowledgeItemIds.map((itemId) =>
-          liveRetrievability(states.get(itemId) ?? null, now),
+          scoringRetrievability(states.get(itemId) ?? null, everCorrect.has(itemId), now),
         ),
       ),
     }));

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { createEmptyCard, Rating } from 'ts-fsrs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { prisma } from '../../../lib/prisma.js';
+import { fromCard, fsrsScheduler, liveRetrievability } from '../../scheduler/fsrs.util.js';
 import * as schedulerService from '../../scheduler/scheduler.service.js';
 import * as masteryService from '../mastery.service.js';
 
@@ -73,5 +75,30 @@ describe('publishModuleMastery', () => {
 
     expect(displayed).toBeGreaterThan(0.79);
     expect(displayed).toBeLessThanOrEqual(0.8);
+  });
+});
+
+describe('scoringRetrievability', () => {
+  it('scores a wrong first answer at 0, even though FSRS reports it fully recalled', () => {
+    const now = new Date();
+    const wrongOnce = fromCard(fsrsScheduler.next(createEmptyCard(now), now, Rating.Again).card);
+
+    // The trap this rule exists for: any review resets FSRS retrievability to 1.0.
+    expect(liveRetrievability(wrongOnce, now)).toBeCloseTo(1, 5);
+    expect(masteryService.scoringRetrievability(wrongOnce, false, now)).toBe(0);
+  });
+
+  it('scores the live R once the item has been answered correctly', () => {
+    const now = new Date();
+    const aWeekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const known = fromCard(fsrsScheduler.next(createEmptyCard(now), now, Rating.Good).card);
+
+    expect(masteryService.scoringRetrievability(known, true, aWeekLater)).toBe(
+      liveRetrievability(known, aWeekLater),
+    );
+  });
+
+  it('scores a never-seen item at 0', () => {
+    expect(masteryService.scoringRetrievability(null, false, new Date())).toBe(0);
   });
 });

@@ -28,8 +28,15 @@ nothing here blocks a merge.
       library defaults, and `scheduler-config.test.ts` fails if the installed build ever drifts.
       The ID is unchanged because the behaviour didn't change - it only became nameable.
 - [x] **3. Mastery layer** — `apps/api/src/modules/mastery/`: live score computed on demand
-      from `ItemMemoryState` via the content-graph relations (never-reviewed items score 0,
-      matching Doc 2 B1); published (kind-but-honest) score in `PublishedMastery`, jumping to
+      from `ItemMemoryState` via the content-graph relations. **An item only enters scoring at
+      its first correct answer** (Doc 2 B1) - fixed in Phase 1. It used to score as soon as any
+      memory state existed, and because FSRS resets retrievability to 1.0 on *every* review, a
+      wrong first answer read as fully known: R 1.000 immediately, 0.766 a day later. Getting
+      questions wrong raised mastery. `scoringRetrievability` in `mastery.service.ts` is now the
+      single rule, derived from the review log (no migration, permanent by construction), and is
+      shared with readiness. `downside-ledger.test.ts` pins everything that must never lower
+      mastery, with a control case proving the permitted decline still works; hints are an
+      `it.todo` because they are not built. Published (kind-but-honest) score in `PublishedMastery`, jumping to
       live on a gain and easing toward it with a 7-day half-life on a decline. `GET
       /api/mastery/:qualificationSlug`. Publishing happens synchronously after each graded
       review for now, since there's no session-end publish point yet (step 5) — a scaffold
@@ -126,7 +133,9 @@ nothing here blocks a merge.
       normal liftoff earned exactly one award, once, never again on later pumps.
 - [x] **9. Readiness (simplified)** — `apps/api/src/modules/readiness/`. `normal-cdf.util.ts`
       is a pure Φ (standard normal CDF) implementation; `readiness.service.ts` computes μ (every
-      item's retrievability projected 14 days forward, aggregated through the same
+      item's retrievability projected 14 days forward - counting only items answered correctly at
+      least once, via the same `scoringRetrievability` rule as mastery, so wrong answers no longer
+      inflate the odds; coverage deliberately still counts attempted items - aggregated through the same
       module/objective weighting mastery uses — `weightedObjectiveMean` and `mean` are now
       exported from `mastery.service.ts` and reused, not duplicated), a coverage-based σ, and
       `P(pass) = Φ((μ − passMark) / σ)`. Odds are withheld below 20% (the spec's "climb frame").

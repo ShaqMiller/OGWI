@@ -93,3 +93,22 @@ describe('computeReadiness', () => {
     expect(result.passMarkPercent).toBe(70);
   });
 });
+
+describe('wrong answers', () => {
+  it('count as covered but add nothing to the odds-of-passing projection', async () => {
+    const learnerId = randomUUID();
+
+    for (const itemId of itemIds) {
+      await schedulerService.gradeReview(learnerId, itemId, 'again', null, randomUUID());
+    }
+
+    const result = await readinessService.computeReadiness(learnerId, qualificationId, passMark);
+
+    // Attempted, so covered - the agreed rule...
+    expect(result.weightedCoveragePercent).toBe(100);
+    // ...but a wrong answer is not evidence of knowing an item, so it projects
+    // nothing. Before this rule, these items projected as recently recalled.
+    expect(result.qualityRatio).toBe(0);
+    expect(result.withheld).toBe(true);
+  });
+});

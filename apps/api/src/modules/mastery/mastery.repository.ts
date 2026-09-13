@@ -68,6 +68,30 @@ export async function findItemMemoryStates(
   );
 }
 
+/**
+ * Which of these items the learner has EVER answered correctly.
+ *
+ * An item enters mastery scoring at its first correct retrieval (Doc 2 B1).
+ * Derived from the append-only review log rather than stored as a flag: no
+ * migration, history already recorded counts automatically, and it is
+ * permanent by construction - the log is never edited, so a known item can
+ * never silently drop back out of scoring (invariant 7).
+ */
+export async function findItemsEverAnsweredCorrectly(
+  learnerId: string,
+  knowledgeItemIds: string[],
+): Promise<Set<string>> {
+  if (knowledgeItemIds.length === 0) return new Set();
+
+  const rows = await prisma.reviewEvent.findMany({
+    where: { learnerId, knowledgeItemId: { in: knowledgeItemIds }, grade: 'GOOD' },
+    distinct: ['knowledgeItemId'],
+    select: { knowledgeItemId: true },
+  });
+
+  return new Set(rows.map((row) => row.knowledgeItemId));
+}
+
 export async function findPublishedRecord(
   learnerId: string,
   moduleId: string,

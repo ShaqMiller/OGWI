@@ -9,8 +9,7 @@ import {
   READINESS_SIGMA_FLOOR,
 } from '@ogwi/shared';
 import * as masteryRepository from '../mastery/mastery.repository.js';
-import { mean, weightedObjectiveMean } from '../mastery/mastery.service.js';
-import { liveRetrievability } from '../scheduler/fsrs.util.js';
+import { mean, scoringRetrievability, weightedObjectiveMean } from '../mastery/mastery.service.js';
 import { resolveCertaintyBand } from './certainty-band.util.js';
 import { normalCdf } from './normal-cdf.util.js';
 import * as readinessRepository from './readiness.repository.js';
@@ -49,7 +48,10 @@ export async function computeReadiness(
 
   const modules = await masteryRepository.findModulesForQualification(qualificationId);
   const allItemIds = modules.flatMap((m) => m.objectives.flatMap((o) => o.knowledgeItemIds));
-  const states = await masteryRepository.findItemMemoryStates(learnerId, allItemIds);
+  const [states, everCorrect] = await Promise.all([
+    masteryRepository.findItemMemoryStates(learnerId, allItemIds),
+    masteryRepository.findItemsEverAnsweredCorrectly(learnerId, allItemIds),
+  ]);
 
   let mu = 0;
   let weightedCoverage = 0;
@@ -59,10 +61,14 @@ export async function computeReadiness(
       subWeight: objective.subWeight,
       score: mean(
         objective.knowledgeItemIds.map((itemId) =>
-          liveRetrievability(states.get(itemId) ?? null, projectionDate),
+          scoringRetrievability(states.get(itemId) ?? null, everCorrect.has(itemId), projectionDate),
         ),
       ),
     }));
+    // Coverage deliberately still counts ATTEMPTED items, wrong answers
+    // included - the learner has met the material. Only the projection above
+    // requires a correct answer, so wrong answers stop inflating the odds
+    // without also hiding what has been attempted.
     const coverageObjectiveScores = module.objectives.map((objective) => ({
       subWeight: objective.subWeight,
       score: mean(objective.knowledgeItemIds.map((itemId) => (states.has(itemId) ? 1 : 0))),

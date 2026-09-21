@@ -663,6 +663,8 @@ model ReadinessPublication {
   meanRatio        Float?
   calibratedScore  Float
   sigma            Float
+  // sigma's four ingredients. Null on rows published before they existed.
+  sigmaComponents  Json?
   passMark         Float
   oddsRaw          Float
   // Each exam run's contribution: submittedAt, achieved, projected, ratio,

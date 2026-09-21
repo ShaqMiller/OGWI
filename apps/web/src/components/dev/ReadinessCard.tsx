@@ -78,7 +78,11 @@ export function ReadinessCard({ slug }: { slug: string }) {
               <Row
                 label="5. Uncertainty (sigma)"
                 value={breakdown.sigma.toFixed(3)}
-                note={`wider when coverage is thin - ${published.weightedCoveragePercent}% covered`}
+                note={
+                  breakdown.sigmaComponents
+                    ? `coverage ${breakdown.sigmaComponents.coverage.toFixed(3)} · exam evidence ${breakdown.sigmaComponents.evidence.toFixed(3)} · run spread ${breakdown.sigmaComponents.spread.toFixed(3)} · paper noise ${breakdown.sigmaComponents.residual.toFixed(3)} (combined as independent sources, floor 0.05)`
+                    : `wider when coverage is thin - ${published.weightedCoveragePercent}% covered`
+                }
               />
               <Row
                 label="6. P(pass)"

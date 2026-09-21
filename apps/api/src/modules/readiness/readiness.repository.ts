@@ -2,8 +2,9 @@ import {
   READINESS_CONFIG_VERSION,
   READINESS_MIN_RUN_QUESTION_COUNT,
   type CalibrationRun,
+  type SigmaComponents,
 } from '@ogwi/shared';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
 import type { CalibrationRunInput } from './calibration.util.js';
 import type { CertaintyBand, PublishedReadiness } from './readiness.types.js';
@@ -166,6 +167,7 @@ export async function createPublication(
       meanRatio: breakdown.meanRatio,
       calibratedScore: breakdown.calibratedScore,
       sigma: breakdown.sigma,
+      sigmaComponents: breakdown.sigmaComponents ?? Prisma.JsonNull,
       passMark: breakdown.passMark,
       oddsRaw: breakdown.oddsRaw,
       calibrationRuns: breakdown.calibrationRuns.map((run) => ({
@@ -211,6 +213,7 @@ export async function findLatestPublication(
       meanRatio: row.meanRatio,
       calibratedScore: row.calibratedScore,
       sigma: row.sigma,
+      sigmaComponents: (row.sigmaComponents as SigmaComponents | null) ?? null,
       passMark: row.passMark,
       oddsRaw: row.oddsRaw,
       calibrationRuns: storedRuns.map((run) => ({ ...run, submittedAt: new Date(run.submittedAt) })),

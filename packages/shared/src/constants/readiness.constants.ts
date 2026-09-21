@@ -1,14 +1,20 @@
 /**
  * Readiness (Doc 2 B2). mu is a 14-day-forward projection, calibrated against
- * the learner's exam-simulation results; sigma is still a simplified
- * coverage-only heuristic rather than the spec's multi-factor formula. Numbers
- * below are starting points, not researched/tuned.
+ * the learner's exam-format runs; sigma combines the spec's four named
+ * ingredients. Numbers below are starting points, not researched/tuned.
  */
 export const READINESS_PROJECTION_DAYS = 14;
 
-/** sigma floor/base for the simplified coverage-only uncertainty heuristic. */
+/**
+ * sigma (the uncertainty behind the odds) - see readiness/sigma.util.ts. The
+ * floor stops precision ever being faked; BASE scales the untouched-coverage
+ * ingredient; EVIDENCE_BASE is the evidence ingredient with no exam runs at
+ * all, shrinking as recent runs accumulate. The spec gives no formula, so all
+ * three are defaults.
+ */
 export const READINESS_SIGMA_FLOOR = 0.05;
 export const READINESS_SIGMA_BASE = 0.35;
+export const READINESS_SIGMA_EVIDENCE_BASE = 0.08;
 
 /** Below this odds, the raw number is withheld for the "climb" framing. */
 export const READINESS_DISPLAY_WITHHOLD_THRESHOLD = 0.2;

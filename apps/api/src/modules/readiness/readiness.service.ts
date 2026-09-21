@@ -5,13 +5,13 @@ import {
   READINESS_DISPLAY_WITHHOLD_THRESHOLD,
   READINESS_FAIR_RUN_WINDOW_DAYS,
   READINESS_PROJECTION_DAYS,
-  READINESS_SIGMA_BASE,
-  READINESS_SIGMA_FLOOR,
   type UnlockChecklist,
 } from '@ogwi/shared';
 import * as clock from '../../lib/clock.js';
 import * as compositionService from '../composition/composition.service.js';
 import * as masteryRepository from '../mastery/mastery.repository.js';
+import type { ModuleWithItems } from '../mastery/mastery.types.js';
+import type { PersistedCardFields } from '../scheduler/fsrs.util.js';
 import {
   isDailyRolloverDue,
   mean,
@@ -28,6 +28,7 @@ import type {
   ReadinessResult,
   ReadinessView,
 } from './readiness.types.js';
+import { computeSigma } from './sigma.util.js';
 import { buildUnlockChecklist } from './unlock-checklist.util.js';
 
 /**
@@ -40,10 +41,8 @@ import { buildUnlockChecklist } from './unlock-checklist.util.js';
  *      performs under exam conditions - see calibration.util.ts.
  *   3. Odds: P(pass) = Phi((calibrated score - pass mark) / sigma).
  *
- * One deliberate deviation remains: sigma is a simple coverage-only heuristic
- * (thin evidence -> wide uncertainty -> odds pulled toward the middle), not the
- * spec's composite of coverage, run evidence, run-ratio spread and residual
- * variance, which it never gives a formula for.
+ * sigma combines the spec's four named ingredients - see sigma.util.ts. The
+ * spec gives no formula for combining them, so that part is a default.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -52,25 +51,27 @@ function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * DAY_MS);
 }
 
+export interface ProjectionInputs {
+  modules: ModuleWithItems[];
+  states: Map<string, PersistedCardFields>;
+  everCorrect: Set<string>;
+}
+
 interface Projection {
   /** mu before calibration: the predicted exam score 14 days out. */
   projectedScore: number;
   weightedCoverage: number;
   itemCount: number;
   coveredCount: number;
+  /** Each item's projected probability of recall on exam day, for sigma's residual. */
+  itemProbabilities: number[];
 }
 
-/**
- * Step 1 on its own. Reads live memory state only (invariant 5) - never the
- * published mastery layer.
- */
-async function computeProjection(
+/** Everything the projection needs, read once. Live memory state only (invariant 5). */
+async function loadProjectionInputs(
   learnerId: string,
   qualificationId: string,
-  now: Date,
-): Promise<Projection> {
-  const projectionDate = addDays(now, READINESS_PROJECTION_DAYS);
-
+): Promise<ProjectionInputs> {
   const modules = await masteryRepository.findModulesForQualification(qualificationId);
   const allItemIds = modules.flatMap((m) => m.objectives.flatMap((o) => o.knowledgeItemIds));
   const [states, everCorrect] = await Promise.all([
@@ -78,17 +79,28 @@ async function computeProjection(
     masteryRepository.findItemsEverAnsweredCorrectly(learnerId, allItemIds),
   ]);
 
+  return { modules, states, everCorrect };
+}
+
+/**
+ * Step 1, pure: the projection from a given set of memory states. Pure so the
+ * next-action simulation can ask "what if" without touching the database.
+ */
+export function projectFrom(inputs: ProjectionInputs, now: Date): Projection {
+  const projectionDate = addDays(now, READINESS_PROJECTION_DAYS);
+  const { modules, states, everCorrect } = inputs;
+  const allItemIds = modules.flatMap((m) => m.objectives.flatMap((o) => o.knowledgeItemIds));
+
+  const probabilityOf = (itemId: string) =>
+    scoringRetrievability(states.get(itemId) ?? null, everCorrect.has(itemId), projectionDate);
+
   let projectedScore = 0;
   let weightedCoverage = 0;
 
   for (const module of modules) {
     const projectedObjectiveScores = module.objectives.map((objective) => ({
       subWeight: objective.subWeight,
-      score: mean(
-        objective.knowledgeItemIds.map((itemId) =>
-          scoringRetrievability(states.get(itemId) ?? null, everCorrect.has(itemId), projectionDate),
-        ),
-      ),
+      score: mean(objective.knowledgeItemIds.map(probabilityOf)),
     }));
     // Coverage deliberately still counts ATTEMPTED items, wrong answers
     // included - the learner has met the material. Only the projection above
@@ -108,6 +120,7 @@ async function computeProjection(
     weightedCoverage,
     itemCount: allItemIds.length,
     coveredCount: allItemIds.filter((id) => states.has(id)).length,
+    itemProbabilities: allItemIds.map(probabilityOf),
   };
 }
 
@@ -121,7 +134,8 @@ export async function computeProjectedScore(
   learnerId: string,
   qualificationId: string,
 ): Promise<number> {
-  return (await computeProjection(learnerId, qualificationId, clock.now())).projectedScore;
+  const inputs = await loadProjectionInputs(learnerId, qualificationId);
+  return projectFrom(inputs, clock.now()).projectedScore;
 }
 
 export async function computeReadiness(
@@ -131,8 +145,8 @@ export async function computeReadiness(
 ): Promise<ReadinessResult> {
   const now = clock.now();
 
-  const [projection, calibrationRuns, examRunDates] = await Promise.all([
-    computeProjection(learnerId, qualificationId, now),
+  const [inputs, calibrationRuns, examRunDates] = await Promise.all([
+    loadProjectionInputs(learnerId, qualificationId),
     readinessRepository.findCalibrationRuns(learnerId, qualificationId),
     readinessRepository.findSubmittedExamRunDates(
       learnerId,
@@ -141,11 +155,17 @@ export async function computeReadiness(
     ),
   ]);
 
+  const projection = projectFrom(inputs, now);
   const calibration = computeCalibration(calibrationRuns, now);
   const calibratedScore = Math.min(1, projection.projectedScore * calibration.ratio);
   const { weightedCoverage } = projection;
 
-  const sigma = Math.max(READINESS_SIGMA_FLOOR, READINESS_SIGMA_BASE * (1 - weightedCoverage));
+  const { sigma, components: sigmaComponents } = computeSigma({
+    weightedCoverage,
+    projectedScore: projection.projectedScore,
+    calibration,
+    itemProbabilities: projection.itemProbabilities,
+  });
   const oddsRaw = normalCdf((calibratedScore - passMark) / sigma);
   const withheld = oddsRaw < READINESS_DISPLAY_WITHHOLD_THRESHOLD;
 
@@ -171,6 +191,7 @@ export async function computeReadiness(
       meanRatio: calibration.meanRatio,
       calibratedScore,
       sigma,
+      sigmaComponents,
       passMark,
       oddsRaw,
       calibrationRuns: calibration.runs,

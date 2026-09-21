@@ -15,6 +15,15 @@ export const calibrationRunSchema = z.object({
 });
 export type CalibrationRun = z.infer<typeof calibrationRunSchema>;
 
+/** sigma's four ingredients, each in exam-score units - see readiness/sigma.util.ts. */
+export const sigmaComponentsSchema = z.object({
+  coverage: z.number().nonnegative(),
+  evidence: z.number().nonnegative(),
+  spread: z.number().nonnegative(),
+  residual: z.number().nonnegative(),
+});
+export type SigmaComponents = z.infer<typeof sigmaComponentsSchema>;
+
 /**
  * Every ingredient of the odds (Doc 2 B2), so the number can be walked through
  * piece by piece: projection, calibration ratio, calibrated score, sigma, pass
@@ -28,6 +37,8 @@ export const readinessBreakdownSchema = z.object({
   meanRatio: z.number().nullable(),
   calibratedScore: z.number().min(0).max(1),
   sigma: z.number().positive(),
+  /** Null only on publications made before sigma had components. */
+  sigmaComponents: sigmaComponentsSchema.nullable(),
   passMark: z.number().min(0).max(1),
   /** P(pass) before rounding or withholding. */
   oddsRaw: z.number().min(0).max(1),

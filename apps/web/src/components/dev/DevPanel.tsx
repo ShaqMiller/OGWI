@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { formatUtc } from './format';
 import { MasteryCard } from './MasteryCard';
+import { ReadinessCard } from './ReadinessCard';
 import { RecentReviewsCard } from './RecentReviewsCard';
 import { RemediationRecordsCard } from './RemediationRecordsCard';
 
@@ -131,6 +132,7 @@ export function DevPanel({ defaultLearnerId }: { defaultLearnerId: string }) {
       {demoActive !== null && slug !== '' && (
         <>
           <MasteryCard slug={slug} />
+          <ReadinessCard slug={slug} />
           <RemediationRecordsCard slug={slug} />
           <RecentReviewsCard slug={slug} />
         </>

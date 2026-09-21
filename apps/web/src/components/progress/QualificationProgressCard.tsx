@@ -103,7 +103,7 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
 
       {/* No score exists until the unlock checklist is done (Doc 2 B2). */}
       {readiness.data && !published?.unlocked && (
-        <ReadinessUnlockChecklist checklist={readiness.data.checklist} />
+        <ReadinessUnlockChecklist checklist={readiness.data.checklist} scorePublished={false} />
       )}
 
       {published?.unlocked && (

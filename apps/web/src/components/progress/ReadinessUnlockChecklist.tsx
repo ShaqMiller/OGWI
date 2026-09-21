@@ -19,8 +19,19 @@ function label(item: UnlockChecklistItem): string {
  * The first-score unlock (Doc 2 B2). The odds of passing don't exist until
  * all three are done, which guarantees the first number a learner ever sees
  * was calibrated against an exam-condition run.
+ *
+ * `scorePublished` says whether an unlocked score has already been published.
+ * The checklist itself is live, so it can be complete while the score still
+ * waits for the next publish point - that gap is the only time the "arrives
+ * when you finish this session" note is true.
  */
-export function ReadinessUnlockChecklist({ checklist }: { checklist: UnlockChecklist }) {
+export function ReadinessUnlockChecklist({
+  checklist,
+  scorePublished,
+}: {
+  checklist: UnlockChecklist;
+  scorePublished: boolean;
+}) {
   return (
     <div style={{ marginTop: 'var(--space-3)', fontSize: '0.9rem' }}>
       <div>Your odds of passing unlock once you&apos;ve done these:</div>
@@ -38,7 +49,7 @@ export function ReadinessUnlockChecklist({ checklist }: { checklist: UnlockCheck
           </li>
         ))}
       </ul>
-      {checklist.unlocked && (
+      {checklist.unlocked && !scorePublished && (
         <p style={{ color: 'var(--color-text-muted)', margin: 'var(--space-2) 0 0' }}>
           All done - your first readiness score arrives when you finish this session.
         </p>

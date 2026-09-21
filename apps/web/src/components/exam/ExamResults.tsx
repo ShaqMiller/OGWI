@@ -35,6 +35,9 @@ export function ExamResults({ runId }: { runId: string }) {
 
   return (
     <div>
+      <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+        {data.kind === 'MINI_MOCK' ? 'Mini-mock' : 'Exam simulation'}
+      </p>
       <h1 style={{ marginTop: 0 }}>{data.qualificationName}</h1>
 
       <Card style={{ marginBottom: 'var(--space-4)' }}>

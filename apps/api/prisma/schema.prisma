@@ -512,6 +512,10 @@ model ConfigDocument {
 enum ExamRunKind {
   // A full randomised practice exam (the Practice page's single entry).
   SIMULATION
+  // A short paper: 10-20 questions, about 10 minutes (Doc 2 B2). The unlock
+  // checklist's route to a first readiness score, and exam evidence like a
+  // simulation.
+  MINI_MOCK
   // A learner-built test. Reserved so that when the test builder lands it
   // does not silently start counting toward readiness's certainty band.
   CUSTOM

@@ -77,6 +77,7 @@ export async function findEligibleItemsByModule(
 export async function createRun(params: {
   learnerId: string;
   qualificationId: string;
+  kind: 'SIMULATION' | 'MINI_MOCK';
   questionCount: number;
   allottedSeconds: number;
   contentGraphVersion: string;
@@ -88,7 +89,7 @@ export async function createRun(params: {
     data: {
       learnerId: params.learnerId,
       qualificationId: params.qualificationId,
-      kind: 'SIMULATION',
+      kind: params.kind,
       questionCount: params.questionCount,
       allottedSeconds: params.allottedSeconds,
       contentGraphVersion: params.contentGraphVersion,

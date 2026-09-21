@@ -69,10 +69,10 @@ export async function getRecentEvents(
  * PREMIUM_MIN_ANSWERED the per-question litres are still paid for whatever was
  * answered, but the completion premium is not - the run wasn't completed.
  *
- * MINI_MOCK is priced but unreachable today (no such run kind exists yet).
+ * CUSTOM is priced but unreachable until the test builder exists.
  */
 export function priceExamPremium(params: {
-  kind: ExamRunKind | 'MINI_MOCK';
+  kind: ExamRunKind;
   answeredCount: number;
   questionCount: number;
 }): number {

@@ -19,8 +19,8 @@ import {
  *     qualifications have a single module, and taken literally the rule would
  *     make a score unreachable - the same deadlock rendering distinctness had
  *     on single-rendering content.
- *   - "Mini-mock" is any submitted Exam Simulation. There is no mini-mock run
- *     kind yet, and a full paper is a superset of one.
+ *   - A full Exam Simulation also ticks "complete one mini-mock": it is a
+ *     superset of one.
  *
  * Pure: the caller supplies the counts.
  */

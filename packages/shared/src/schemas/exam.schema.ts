@@ -11,19 +11,26 @@ import { renderingFormatSchema } from './content-graph.schema.js';
  * served only after the run is submitted.
  */
 
-export const examRunKindSchema = z.enum(['SIMULATION', 'CUSTOM']);
+export const examRunKindSchema = z.enum(['SIMULATION', 'MINI_MOCK', 'CUSTOM']);
 export type ExamRunKind = z.infer<typeof examRunKindSchema>;
+
+/** The kinds a learner can start. CUSTOM waits for the test builder. */
+export const startableExamRunKindSchema = z.enum(['SIMULATION', 'MINI_MOCK']);
+export type StartableExamRunKind = z.infer<typeof startableExamRunKindSchema>;
 
 export const examRunStatusSchema = z.enum(['IN_PROGRESS', 'SUBMITTED']);
 export type ExamRunStatus = z.infer<typeof examRunStatusSchema>;
 
 export const startExamRunRequestSchema = z.object({
   qualificationSlug: z.string().min(1),
+  kind: startableExamRunKindSchema.default('SIMULATION'),
 });
-export type StartExamRunRequest = z.infer<typeof startExamRunRequestSchema>;
+/** The request as sent - `kind` may be omitted, and then means a full simulation. */
+export type StartExamRunRequest = z.input<typeof startExamRunRequestSchema>;
 
 export const startExamRunResponseSchema = z.object({
   runId: z.string().uuid(),
+  kind: examRunKindSchema,
   /** The paper's REAL size, which may be below the target when content is thin. */
   questionCount: z.number().int().positive(),
   allottedSeconds: z.number().int().positive(),
@@ -50,6 +57,7 @@ export const examPaperSchema = z.object({
   runId: z.string().uuid(),
   qualificationSlug: z.string().min(1),
   qualificationName: z.string().min(1),
+  kind: examRunKindSchema,
   status: examRunStatusSchema,
   questionCount: z.number().int().positive(),
   allottedSeconds: z.number().int().positive(),
@@ -94,6 +102,7 @@ export const examResultsSchema = z.object({
   runId: z.string().uuid(),
   qualificationSlug: z.string().min(1),
   qualificationName: z.string().min(1),
+  kind: examRunKindSchema,
   correctCount: z.number().int().nonnegative(),
   scoredCount: z.number().int().positive(),
   scorePercent: z.number().min(0).max(100),

@@ -2,6 +2,9 @@ import {
   EXAM_MIN_QUESTION_COUNT,
   EXAM_SECONDS_PER_QUESTION,
   EXAM_TARGET_QUESTION_COUNT,
+  MINI_MOCK_SECONDS_PER_QUESTION,
+  MINI_MOCK_TARGET_QUESTION_COUNT,
+  type StartableExamRunKind,
   type ExamPaper,
   type ExamResultQuestion,
   type ExamResults,
@@ -34,10 +37,18 @@ import type { ExamRunRow } from './exam.types.js';
  * blind; everything is marked at submit.
  */
 
+/** Paper size and pace per kind. Both papers are drawn the same blueprint-weighted way. */
+const PAPER_SHAPE: Record<StartableExamRunKind, { targetCount: number; secondsPerQuestion: number }> = {
+  SIMULATION: { targetCount: EXAM_TARGET_QUESTION_COUNT, secondsPerQuestion: EXAM_SECONDS_PER_QUESTION },
+  MINI_MOCK: { targetCount: MINI_MOCK_TARGET_QUESTION_COUNT, secondsPerQuestion: MINI_MOCK_SECONDS_PER_QUESTION },
+};
+
 export async function startRun(
   learnerId: string,
   qualificationSlug: string,
+  kind: StartableExamRunKind = 'SIMULATION',
 ): Promise<StartExamRunResponse> {
+  const shape = PAPER_SHAPE[kind];
   const qualification = await contentGraphService.getQualificationBySlug(qualificationSlug);
   const modules = await examRepository.findEligibleItemsByModule(qualification.id);
 
@@ -48,7 +59,7 @@ export async function startRun(
       blueprintWeight: module.blueprintWeight,
       eligibleItemIds: module.eligibleItems.map((item) => item.knowledgeItemId),
     })),
-    EXAM_TARGET_QUESTION_COUNT,
+    shape.targetCount,
     Math.random,
   );
 
@@ -73,11 +84,12 @@ export async function startRun(
   const questionCount = order.length;
   // Derived from the REAL paper, never the target - an 8-question paper must
   // not advertise a 30-question paper's duration (Doc 2 A5 shows both).
-  const allottedSeconds = questionCount * EXAM_SECONDS_PER_QUESTION;
+  const allottedSeconds = questionCount * shape.secondsPerQuestion;
 
   const runId = await examRepository.createRun({
     learnerId,
     qualificationId: qualification.id,
+    kind,
     questionCount,
     allottedSeconds,
     contentGraphVersion: qualification.contentGraphVersion,
@@ -90,7 +102,7 @@ export async function startRun(
     })),
   });
 
-  return { runId, questionCount, allottedSeconds };
+  return { runId, kind, questionCount, allottedSeconds };
 }
 
 async function loadRun(runId: string, learnerId: string): Promise<ExamRunRow> {
@@ -114,6 +126,7 @@ export async function getPaper(runId: string, learnerId: string): Promise<ExamPa
     runId: run.id,
     qualificationSlug: run.qualificationSlug,
     qualificationName: run.qualificationName,
+    kind: run.kind,
     status: run.status,
     questionCount: run.questionCount,
     allottedSeconds: run.allottedSeconds,
@@ -395,6 +408,7 @@ export async function getResults(runId: string, learnerId: string): Promise<Exam
     runId: run.id,
     qualificationSlug: run.qualificationSlug,
     qualificationName: run.qualificationName,
+    kind: run.kind,
     correctCount,
     scoredCount,
     scorePercent: Math.round((correctCount / scoredCount) * 100),

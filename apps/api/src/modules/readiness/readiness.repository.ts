@@ -41,13 +41,20 @@ export async function findReviewCountsByDay(
 }
 
 /**
+ * The run kinds that count as exam-format evidence (Doc 2 B2: "Exam Simulation,
+ * mini-mock, custom exam mode"). CUSTOM stays out until the test builder
+ * exists, so a learner-built test can never buy a confident band by accident.
+ */
+const EXAM_FORMAT_KINDS: ('SIMULATION' | 'MINI_MOCK')[] = ['SIMULATION', 'MINI_MOCK'];
+
+/**
  * When this learner last sat exam-format runs, for the certainty band.
  *
  * Queried here rather than through the exam module so readiness stays a leaf -
  * the same precedent as reading reviewEvent (scheduler's table) above.
  *
- * Only SIMULATION runs count: a learner-built CUSTOM test must never buy a
- * confident band. Fetches the WIDER window once; the pure util does both
+ * Simulations and mini-mocks count; a learner-built CUSTOM test must never buy
+ * a confident band. Fetches the WIDER window once; the pure util does both
  * counts.
  */
 export async function findSubmittedExamRunDates(
@@ -59,7 +66,7 @@ export async function findSubmittedExamRunDates(
     where: {
       learnerId,
       qualificationId,
-      kind: 'SIMULATION',
+      kind: { in: EXAM_FORMAT_KINDS },
       status: 'SUBMITTED',
       submittedAt: { gte: since },
       questionCount: { gte: READINESS_MIN_RUN_QUESTION_COUNT },
@@ -85,7 +92,7 @@ export async function findCalibrationRuns(
     where: {
       learnerId,
       qualificationId,
-      kind: 'SIMULATION',
+      kind: { in: EXAM_FORMAT_KINDS },
       status: 'SUBMITTED',
       questionCount: { gte: READINESS_MIN_RUN_QUESTION_COUNT },
       projectedScore: { not: null },
@@ -114,7 +121,7 @@ export async function countSubmittedExamRuns(
     where: {
       learnerId,
       qualificationId,
-      kind: 'SIMULATION',
+      kind: { in: EXAM_FORMAT_KINDS },
       status: 'SUBMITTED',
       questionCount: { gte: READINESS_MIN_RUN_QUESTION_COUNT },
     },

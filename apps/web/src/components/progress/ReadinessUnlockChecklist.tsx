@@ -11,7 +11,7 @@ function label(item: UnlockChecklistItem): string {
         ? 'Answer questions from the course'
         : `Answer questions across ${item.required} modules (${item.current} of ${item.required})`;
     case 'first_exam_run':
-      return 'Complete one exam simulation';
+      return 'Complete one mini-mock (about 10 minutes)';
   }
 }
 

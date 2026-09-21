@@ -17,6 +17,14 @@ export const EXAM_TARGET_QUESTION_COUNT = 30;
 /** Allotted time is derived from the ACTUAL paper size, never the target. */
 export const EXAM_SECONDS_PER_QUESTION = 90;
 
+/**
+ * The mini-mock (Doc 2 B2: "10-20 questions, ~10 minutes"). 15 sits in the
+ * middle of the spec's range, and 40 seconds a question makes 15 questions ten
+ * minutes. Both are defaults the spec leaves open.
+ */
+export const MINI_MOCK_TARGET_QUESTION_COUNT = 15;
+export const MINI_MOCK_SECONDS_PER_QUESTION = 40;
+
 /** Below this, there isn't enough content to make a paper worth sitting. */
 export const EXAM_MIN_QUESTION_COUNT = 1;
 

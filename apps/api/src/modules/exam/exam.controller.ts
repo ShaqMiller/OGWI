@@ -12,7 +12,7 @@ export async function startExamRun(req: Request, res: Response): Promise<void> {
   // requireLearner has already run and guarantees this is set.
   const learnerId = req.learnerId as string;
 
-  const result = await examService.startRun(learnerId, body.qualificationSlug);
+  const result = await examService.startRun(learnerId, body.qualificationSlug, body.kind);
 
   res.status(201).json(result);
 }

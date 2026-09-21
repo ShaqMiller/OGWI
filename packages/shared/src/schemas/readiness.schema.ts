@@ -3,6 +3,38 @@ import { z } from 'zod';
 export const certaintyBandSchema = z.enum(['early', 'fair', 'solid']);
 export type CertaintyBand = z.infer<typeof certaintyBandSchema>;
 
+/** One exam run's contribution to calibration. */
+export const calibrationRunSchema = z.object({
+  submittedAt: z.coerce.date(),
+  achievedScore: z.number().min(0).max(1),
+  /** The projection when the run was submitted, before its own answers were graded. */
+  projectedScore: z.number().min(0).max(1),
+  /** achieved / projected. Null when the projection was too small to divide by. */
+  ratio: z.number().nullable(),
+  weight: z.number().min(0),
+});
+export type CalibrationRun = z.infer<typeof calibrationRunSchema>;
+
+/**
+ * Every ingredient of the odds (Doc 2 B2), so the number can be walked through
+ * piece by piece: projection, calibration ratio, calibrated score, sigma, pass
+ * mark. All as 0-1 fractions.
+ */
+export const readinessBreakdownSchema = z.object({
+  projectedScore: z.number().min(0).max(1),
+  /** The clamped ratio actually applied; 1.0 with no usable runs. */
+  calibrationRatio: z.number(),
+  /** The unclamped recency-weighted mean, or null with no usable runs. */
+  meanRatio: z.number().nullable(),
+  calibratedScore: z.number().min(0).max(1),
+  sigma: z.number().positive(),
+  passMark: z.number().min(0).max(1),
+  /** P(pass) before rounding or withholding. */
+  oddsRaw: z.number().min(0).max(1),
+  calibrationRuns: z.array(calibrationRunSchema),
+});
+export type ReadinessBreakdown = z.infer<typeof readinessBreakdownSchema>;
+
 export const readinessResultSchema = z.object({
   oddsPercent: z.number().min(0).max(100).nullable(),
   withheld: z.boolean(),
@@ -16,5 +48,6 @@ export const readinessResultSchema = z.object({
     itemsRemaining: z.number().int().nonnegative(),
     paceItemsPerDay: z.number().nonnegative(),
   }),
+  breakdown: readinessBreakdownSchema,
 });
 export type ReadinessResult = z.infer<typeof readinessResultSchema>;

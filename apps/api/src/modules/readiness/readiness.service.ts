@@ -11,6 +11,7 @@ import {
 import * as clock from '../../lib/clock.js';
 import * as masteryRepository from '../mastery/mastery.repository.js';
 import { mean, scoringRetrievability, weightedObjectiveMean } from '../mastery/mastery.service.js';
+import { computeCalibration } from './calibration.util.js';
 import { resolveCertaintyBand } from './certainty-band.util.js';
 import { normalCdf } from './normal-cdf.util.js';
 import * as readinessRepository from './readiness.repository.js';
@@ -19,18 +20,17 @@ import type { CertaintyBand, ReadinessResult } from './readiness.types.js';
 /**
  * Business logic only. Never touches req/res, never imports Prisma types.
  *
- * Simplified from Doc 2 B2 - see packages/shared/src/constants/readiness.constants.ts
- * for what and why. One deliberate deviation remains:
- *   - sigma is a simple coverage-only heuristic (thin evidence -> wide
- *     uncertainty -> odds pulled toward the middle), not the spec's
- *     multi-factor formula. mu likewise has no calibration term
- *     (ratio = achieved score / projection), which exam runs now make
- *     possible but which is a separate piece of work.
+ * Doc 2 B2, in three steps:
+ *   1. Projection: every item's live R projected 14 days forward, aggregated
+ *      through the mapping table into a predicted exam score.
+ *   2. Calibration: that projection multiplied by how the learner actually
+ *      performs under exam conditions - see calibration.util.ts.
+ *   3. Odds: P(pass) = Phi((calibrated score - pass mark) / sigma).
  *
- * Certainty bands used to be a second deviation, computed from coverage
- * alone because no exam system existed to produce run evidence. Exam
- * Simulation produces it now, so the band applies the spec's full rule -
- * see certainty-band.util.ts.
+ * One deliberate deviation remains: sigma is a simple coverage-only heuristic
+ * (thin evidence -> wide uncertainty -> odds pulled toward the middle), not the
+ * spec's composite of coverage, run evidence, run-ratio spread and residual
+ * variance, which it never gives a formula for.
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -39,12 +39,23 @@ function addDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * DAY_MS);
 }
 
-export async function computeReadiness(
+interface Projection {
+  /** mu before calibration: the predicted exam score 14 days out. */
+  projectedScore: number;
+  weightedCoverage: number;
+  itemCount: number;
+  coveredCount: number;
+}
+
+/**
+ * Step 1 on its own. Reads live memory state only (invariant 5) - never the
+ * published mastery layer.
+ */
+async function computeProjection(
   learnerId: string,
   qualificationId: string,
-  passMark: number,
-): Promise<ReadinessResult> {
-  const now = clock.now();
+  now: Date,
+): Promise<Projection> {
   const projectionDate = addDays(now, READINESS_PROJECTION_DAYS);
 
   const modules = await masteryRepository.findModulesForQualification(qualificationId);
@@ -54,7 +65,7 @@ export async function computeReadiness(
     masteryRepository.findItemsEverAnsweredCorrectly(learnerId, allItemIds),
   ]);
 
-  let mu = 0;
+  let projectedScore = 0;
   let weightedCoverage = 0;
 
   for (const module of modules) {
@@ -75,23 +86,59 @@ export async function computeReadiness(
       score: mean(objective.knowledgeItemIds.map((itemId) => (states.has(itemId) ? 1 : 0))),
     }));
 
-    mu += weightedObjectiveMean(projectedObjectiveScores) * module.blueprintWeight;
+    projectedScore += weightedObjectiveMean(projectedObjectiveScores) * module.blueprintWeight;
     weightedCoverage += weightedObjectiveMean(coverageObjectiveScores) * module.blueprintWeight;
   }
 
+  return {
+    projectedScore,
+    weightedCoverage,
+    itemCount: allItemIds.length,
+    coveredCount: allItemIds.filter((id) => states.has(id)).length,
+  };
+}
+
+/**
+ * The uncalibrated projection right now. Exam submit stores this on the run
+ * BEFORE the run's own answers are graded, which is what "the projection at
+ * that moment" has to mean: grading the paper first would move the projection
+ * toward the paper's own result and flatten every ratio toward 1.
+ */
+export async function computeProjectedScore(
+  learnerId: string,
+  qualificationId: string,
+): Promise<number> {
+  return (await computeProjection(learnerId, qualificationId, clock.now())).projectedScore;
+}
+
+export async function computeReadiness(
+  learnerId: string,
+  qualificationId: string,
+  passMark: number,
+): Promise<ReadinessResult> {
+  const now = clock.now();
+
+  const [projection, calibrationRuns, examRunDates] = await Promise.all([
+    computeProjection(learnerId, qualificationId, now),
+    readinessRepository.findCalibrationRuns(learnerId, qualificationId),
+    readinessRepository.findSubmittedExamRunDates(
+      learnerId,
+      qualificationId,
+      addDays(now, -READINESS_FAIR_RUN_WINDOW_DAYS),
+    ),
+  ]);
+
+  const calibration = computeCalibration(calibrationRuns, now);
+  const calibratedScore = Math.min(1, projection.projectedScore * calibration.ratio);
+  const { weightedCoverage } = projection;
+
   const sigma = Math.max(READINESS_SIGMA_FLOOR, READINESS_SIGMA_BASE * (1 - weightedCoverage));
-  const oddsRaw = normalCdf((mu - passMark) / sigma);
+  const oddsRaw = normalCdf((calibratedScore - passMark) / sigma);
   const withheld = oddsRaw < READINESS_DISPLAY_WITHHOLD_THRESHOLD;
 
-  const examRunDates = await readinessRepository.findSubmittedExamRunDates(
-    learnerId,
-    qualificationId,
-    addDays(now, -READINESS_FAIR_RUN_WINDOW_DAYS),
-  );
   const certaintyBand: CertaintyBand = resolveCertaintyBand(weightedCoverage, examRunDates, now);
 
-  const coveredCount = allItemIds.filter((id) => states.has(id)).length;
-  const itemsRemaining = allItemIds.length - coveredCount;
+  const itemsRemaining = projection.itemCount - projection.coveredCount;
   const forecast = await computeForecast(learnerId, qualificationId, itemsRemaining, now);
 
   return {
@@ -100,9 +147,21 @@ export async function computeReadiness(
     weightedCoveragePercent: Math.round(weightedCoverage * 100),
     certaintyBand,
     passMarkPercent: Math.round(passMark * 100),
-    qualityRatio: weightedCoverage > 0 ? mu / weightedCoverage : 0,
+    qualityRatio: weightedCoverage > 0 ? calibratedScore / weightedCoverage : 0,
     celebrationEligible: oddsRaw >= READINESS_CELEBRATION_THRESHOLD,
     forecast,
+    // Every ingredient of the number, so it can be walked through piece by
+    // piece rather than taken on trust.
+    breakdown: {
+      projectedScore: projection.projectedScore,
+      calibrationRatio: calibration.ratio,
+      meanRatio: calibration.meanRatio,
+      calibratedScore,
+      sigma,
+      passMark,
+      oddsRaw,
+      calibrationRuns: calibration.runs,
+    },
   };
 }
 

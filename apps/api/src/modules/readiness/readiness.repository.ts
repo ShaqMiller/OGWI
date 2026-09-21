@@ -1,5 +1,6 @@
 import { READINESS_MIN_RUN_QUESTION_COUNT } from '@ogwi/shared';
 import { prisma } from '../../lib/prisma.js';
+import type { CalibrationRunInput } from './calibration.util.js';
 
 /**
  * The only file in this module allowed to import the Prisma client for
@@ -63,4 +64,37 @@ export async function findSubmittedExamRunDates(
   return rows
     .map((row) => row.submittedAt)
     .filter((submittedAt): submittedAt is Date => submittedAt !== null);
+}
+
+/**
+ * Submitted exam-simulation runs that carry a stored projection, for
+ * calibration. Runs from before projections were recorded are skipped rather
+ * than guessed at - their projection at the time is unknowable.
+ */
+export async function findCalibrationRuns(
+  learnerId: string,
+  qualificationId: string,
+): Promise<CalibrationRunInput[]> {
+  const rows = await prisma.examRun.findMany({
+    where: {
+      learnerId,
+      qualificationId,
+      kind: 'SIMULATION',
+      status: 'SUBMITTED',
+      questionCount: { gte: READINESS_MIN_RUN_QUESTION_COUNT },
+      projectedScore: { not: null },
+      submittedAt: { not: null },
+      correctCount: { not: null },
+      scoredCount: { not: null },
+    },
+    orderBy: { submittedAt: 'asc' },
+    select: { submittedAt: true, correctCount: true, scoredCount: true, projectedScore: true },
+  });
+
+  return rows.map((row) => ({
+    submittedAt: row.submittedAt as Date,
+    correctCount: row.correctCount as number,
+    scoredCount: row.scoredCount as number,
+    projectedScore: row.projectedScore as number,
+  }));
 }

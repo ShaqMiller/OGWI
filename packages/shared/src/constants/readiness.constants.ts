@@ -1,10 +1,8 @@
 /**
- * Readiness (Doc 2 B2), simplified: no exam/mock system exists yet, so the
- * spec's exam-condition calibration (ratio = achieved score / projection)
- * never has evidence to work with. mu is a pure 14-day-forward projection
- * with no calibration adjustment; sigma is a simplified coverage-only
- * heuristic rather than the full multi-factor formula. Numbers below are
- * starting points, not researched/tuned.
+ * Readiness (Doc 2 B2). mu is a 14-day-forward projection, calibrated against
+ * the learner's exam-simulation results; sigma is still a simplified
+ * coverage-only heuristic rather than the spec's multi-factor formula. Numbers
+ * below are starting points, not researched/tuned.
  */
 export const READINESS_PROJECTION_DAYS = 14;
 
@@ -48,4 +46,27 @@ export const READINESS_MIN_RUN_QUESTION_COUNT = 1;
 export const PACE_WINDOW_DAYS = 28;
 export const PACE_HALF_LIFE_DAYS = 14;
 
-export const READINESS_CONFIG_VERSION = 'readiness-simple-2';
+/**
+ * Exam-condition calibration (Doc 2 B2): the projection is multiplied by the
+ * recency-weighted mean of (achieved score / projection at that moment) across
+ * exam runs, clamped to [MIN_RATIO, MAX_RATIO]. The clamp values are the spec's.
+ */
+export const READINESS_CALIBRATION_MIN_RATIO = 0.7;
+export const READINESS_CALIBRATION_MAX_RATIO = 1.1;
+
+/**
+ * "Recency-weighted" has no weighting in the spec. A run's weight halves every
+ * this-many days - 30, to match the window a "solid" certainty band looks at.
+ * A default, not a researched value.
+ */
+export const READINESS_CALIBRATION_HALF_LIFE_DAYS = 30;
+
+/**
+ * Runs whose projection was below this don't calibrate: dividing by a
+ * near-zero projection makes the ratio meaningless (one right answer over a
+ * projection of 0.01 is a ratio of 100). They still count as exam evidence for
+ * the certainty band. Not in the spec - a default to keep the maths honest.
+ */
+export const READINESS_CALIBRATION_MIN_PROJECTION = 0.05;
+
+export const READINESS_CONFIG_VERSION = 'readiness-calibrated-3';

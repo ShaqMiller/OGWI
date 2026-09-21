@@ -547,6 +547,13 @@ model ExamRun {
   scoredCount  Int?
   passed       Boolean?
 
+  // The readiness projection (Doc 2 B2's mu, before calibration) at the
+  // moment of submit, taken BEFORE this run's own answers were graded. The
+  // run's calibration ratio is correctCount/scoredCount divided by this.
+  // Null for runs submitted before it was recorded - their projection at the
+  // time can't be reconstructed, so they never calibrate.
+  projectedScore Float?
+
   // Both snapshotted at creation. Qualification.passMark is mutable, and
   // without a snapshot, editing it would retroactively rewrite the verdict
   // on every past run.

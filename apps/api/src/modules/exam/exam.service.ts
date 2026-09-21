@@ -13,6 +13,7 @@ import * as contentGraphService from '../content-graph/content-graph.service.js'
 import * as economyService from '../economy/economy.service.js';
 import * as flightService from '../flight/flight.service.js';
 import * as masteryService from '../mastery/mastery.service.js';
+import * as readinessService from '../readiness/readiness.service.js';
 import {
   examItemActKey,
   examRunPremiumKey,
@@ -188,7 +189,11 @@ export async function submitRun(runId: string, learnerId: string): Promise<ExamR
   const run = await loadRun(runId, learnerId);
 
   if (run.status === 'IN_PROGRESS') {
-    await markAndFreeze(run);
+    // The projection this paper is judged against for calibration (Doc 2 B2:
+    // "the projection at that moment"). Taken before the paper's answers are
+    // graded into memory - after, it would already reflect the paper itself.
+    const projectedScore = await readinessService.computeProjectedScore(learnerId, run.qualificationId);
+    await markAndFreeze(run, projectedScore);
   }
 
   await writeEngineEvents(runId, learnerId);
@@ -238,7 +243,7 @@ async function awardCompletionPremium(runId: string, learnerId: string): Promise
   }
 }
 
-async function markAndFreeze(run: ExamRunRow): Promise<void> {
+async function markAndFreeze(run: ExamRunRow, projectedScore: number): Promise<void> {
   const answered = run.items.filter((item) => item.selectedOptionIndex !== null);
 
   const verdicts = await contentGraphService.checkAnswers(
@@ -270,6 +275,7 @@ async function markAndFreeze(run: ExamRunRow): Promise<void> {
     scoredCount,
     passed,
     submittedAt: clock.now(),
+    projectedScore,
   });
 }
 

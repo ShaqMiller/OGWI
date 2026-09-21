@@ -1,3 +1,5 @@
+import type { ReadinessBreakdown } from '@ogwi/shared';
+
 export type CertaintyBand = 'early' | 'fair' | 'solid';
 
 export interface ReadinessResult {
@@ -13,4 +15,5 @@ export interface ReadinessResult {
     itemsRemaining: number;
     paceItemsPerDay: number;
   };
+  breakdown: ReadinessBreakdown;
 }

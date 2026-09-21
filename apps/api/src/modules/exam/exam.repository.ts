@@ -198,6 +198,7 @@ export async function finaliseRun(params: {
   scoredCount: number;
   passed: boolean;
   submittedAt: Date;
+  projectedScore: number;
 }): Promise<boolean> {
   const results = await prisma.$transaction([
     ...params.marks.map((mark) =>
@@ -214,6 +215,7 @@ export async function finaliseRun(params: {
         correctCount: params.correctCount,
         scoredCount: params.scoredCount,
         passed: params.passed,
+        projectedScore: params.projectedScore,
       },
     }),
   ]);

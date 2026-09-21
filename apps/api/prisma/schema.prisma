@@ -619,3 +619,54 @@ model LearnerClockOffset {
 
   @@map("learner_clock_offsets")
 }
+
+// ---------------------------------------------------------------------------
+// Readiness publications (apps/api/src/modules/readiness/)
+// ---------------------------------------------------------------------------
+//
+// The odds of passing are "recomputed only at publish points" (Doc 2 B2):
+// session end, practice-run end, exam submit, or the daily rollover. Each
+// publish appends one row; the latest is what the learner sees. Append-only,
+// so the rows double as the odds/certainty history Doc 2 B2 lists under
+// analytics.
+//
+// While `unlocked` is false the first-score checklist wasn't complete, and no
+// odds were published: oddsPercent is null. Everything else is still stored,
+// so the number can be walked through piece by piece once it appears.
+model ReadinessPublication {
+  id              String   @id @default(uuid())
+  learnerId       String
+  // Bare id, as Flight.qualificationId: history outlives content edits.
+  qualificationId String
+  publishedAt     DateTime
+
+  unlocked                Boolean
+  oddsPercent             Int?
+  withheld                Boolean
+  weightedCoveragePercent Int
+  certaintyBand           String
+  passMarkPercent         Int
+  qualityRatio            Float
+  celebrationEligible     Boolean
+
+  forecastFinishDate      String?
+  forecastItemsRemaining  Int
+  forecastPaceItemsPerDay Float
+
+  // The breakdown (Doc 2 B2's ingredients), as 0-1 fractions.
+  projectedScore   Float
+  calibrationRatio Float
+  meanRatio        Float?
+  calibratedScore  Float
+  sigma            Float
+  passMark         Float
+  oddsRaw          Float
+  // Each exam run's contribution: submittedAt, achieved, projected, ratio,
+  // weight. Numbers and timestamps only - nothing a learner typed.
+  calibrationRuns  Json
+
+  readinessConfigVersion String
+
+  @@index([learnerId, qualificationId, publishedAt])
+  @@map("readiness_publications")
+}

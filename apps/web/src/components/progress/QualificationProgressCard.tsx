@@ -7,6 +7,7 @@ import { useEconomyBalance } from '@/hooks/economy/useEconomyBalance';
 import { useFlightState } from '@/hooks/flight/useFlightState';
 import { useReadiness } from '@/hooks/readiness/useReadiness';
 import { ModuleMasteryBar } from '@/components/mastery/ModuleMasteryBar';
+import { ReadinessUnlockChecklist } from './ReadinessUnlockChecklist';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
@@ -53,6 +54,8 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
   const balance = useEconomyBalance(qualification.slug);
   const flight = useFlightState(qualification.slug);
   const readiness = useReadiness(qualification.slug);
+  // The odds as last published - they only move at a publish point.
+  const published = readiness.data?.published ?? null;
 
   return (
     <Card style={{ margin: 'var(--space-4) 0' }}>
@@ -91,30 +94,34 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
         because under the odds it read as a "ready by" date - which the
         client's decision log rejects. Readiness itself has no date.
       */}
-      {readiness.data?.forecast.expectedFinishDate &&
-        readiness.data.forecast.itemsRemaining > 0 && (
-          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: 'var(--space-2) 0 0' }}>
-            At this pace you&apos;ll have worked through the whole course by around{' '}
-            {formatShortDate(readiness.data.forecast.expectedFinishDate)}.
-          </p>
-        )}
+      {published?.forecast.expectedFinishDate && published.forecast.itemsRemaining > 0 && (
+        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: 'var(--space-2) 0 0' }}>
+          At this pace you&apos;ll have worked through the whole course by around{' '}
+          {formatShortDate(published.forecast.expectedFinishDate)}.
+        </p>
+      )}
 
-      {readiness.data && (
+      {/* No score exists until the unlock checklist is done (Doc 2 B2). */}
+      {readiness.data && !published?.unlocked && (
+        <ReadinessUnlockChecklist checklist={readiness.data.checklist} />
+      )}
+
+      {published?.unlocked && (
         <div style={{ marginTop: 'var(--space-3)', fontSize: '0.9rem' }}>
-          {readiness.data.withheld ? (
+          {published.withheld ? (
             <>
               Odds of passing: <Badge>under 20%</Badge> — on track at{' '}
-              {readiness.data.weightedCoveragePercent}% coverage; climbs as you go
+              {published.weightedCoveragePercent}% coverage; climbs as you go
             </>
           ) : (
             <>
-              Odds of passing if you sat it soon: <strong>{readiness.data.oddsPercent}%</strong>{' '}
-              <Badge tone={CERTAINTY_TONE[readiness.data.certaintyBand]}>
-                {CERTAINTY_LABEL[readiness.data.certaintyBand]}
+              Odds of passing if you sat it soon: <strong>{published.oddsPercent}%</strong>{' '}
+              <Badge tone={CERTAINTY_TONE[published.certaintyBand]}>
+                {CERTAINTY_LABEL[published.certaintyBand]}
               </Badge>
-              {CERTAINTY_NEXT_STEP[readiness.data.certaintyBand] && (
+              {CERTAINTY_NEXT_STEP[published.certaintyBand] && (
                 <div style={{ color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
-                  {CERTAINTY_NEXT_STEP[readiness.data.certaintyBand]}
+                  {CERTAINTY_NEXT_STEP[published.certaintyBand]}
                 </div>
               )}
             </>

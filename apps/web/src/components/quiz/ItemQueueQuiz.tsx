@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useKnowledgeItemPrompt } from '@/hooks/content-graph/useKnowledgeItemPrompt';
-import { usePublishMastery } from '@/hooks/mastery/usePublishMastery';
+import { usePublishSession } from '@/hooks/publishing/usePublishSession';
 import { useSubmitAnswer } from '@/hooks/scheduler/useSubmitAnswer';
 import { MultipleChoiceOptions } from './MultipleChoiceOptions';
 
@@ -28,7 +28,7 @@ export function ItemQueueQuiz({
   // without the tag a late result could be painted onto the next question.
   const [marked, setMarked] = useState<{ itemId: string; correctOptionIndex: number } | null>(null);
   const submitAnswer = useSubmitAnswer(qualificationSlug);
-  const { mutate: publishMastery } = usePublishMastery(qualificationSlug);
+  const { mutate: publishMastery } = usePublishSession(qualificationSlug);
   const published = useRef(false);
 
   const finished = itemIds.length > 0 && index >= itemIds.length;

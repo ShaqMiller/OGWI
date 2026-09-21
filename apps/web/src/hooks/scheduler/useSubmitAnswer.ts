@@ -24,7 +24,7 @@ import { queryKeys } from '@/lib/queryKeys';
  * balance, due items and the flight, so those are refreshed. Displayed
  * mastery deliberately is NOT: it only changes at a publish point (Doc 2 C4 -
  * session end, practice-run end, exam submit, daily rollover), never
- * mid-activity. See usePublishMastery. Scoped invalidation via the query-key
+ * mid-activity. See usePublishSession. Scoped invalidation via the query-key
  * factory, not a blanket refetch-everything.
  */
 function newAttemptId(): string {

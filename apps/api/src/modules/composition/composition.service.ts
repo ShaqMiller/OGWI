@@ -88,6 +88,21 @@ export function resolveActivitySlot(topic: TopicWithObjectives): ActivitySlot {
   return null;
 }
 
+/**
+ * How many topics the learner has attempted every item of - the same
+ * completeness rule composition uses to move on. For readiness's first-score
+ * unlock ("complete your first topic").
+ */
+export async function countCompletedTopics(
+  learnerId: string,
+  qualificationId: string,
+): Promise<number> {
+  const topics = await compositionRepository.findTopicsForQualification(qualificationId);
+  const states = await compositionRepository.findItemStates(learnerId, topics.flatMap(allItemIds));
+
+  return topics.filter((topic) => isTopicComplete(topic, states)).length;
+}
+
 export async function composeNextSession(
   learnerId: string,
   qualificationId: string,

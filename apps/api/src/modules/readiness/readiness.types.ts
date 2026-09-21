@@ -1,4 +1,4 @@
-import type { ReadinessBreakdown } from '@ogwi/shared';
+import type { ReadinessBreakdown, UnlockChecklist } from '@ogwi/shared';
 
 export type CertaintyBand = 'early' | 'fair' | 'solid';
 
@@ -16,4 +16,14 @@ export interface ReadinessResult {
     paceItemsPerDay: number;
   };
   breakdown: ReadinessBreakdown;
+}
+
+export interface PublishedReadiness extends ReadinessResult {
+  unlocked: boolean;
+  publishedAt: Date;
+}
+
+export interface ReadinessView {
+  checklist: UnlockChecklist;
+  published: PublishedReadiness | null;
 }

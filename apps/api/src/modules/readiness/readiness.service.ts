@@ -7,15 +7,28 @@ import {
   READINESS_PROJECTION_DAYS,
   READINESS_SIGMA_BASE,
   READINESS_SIGMA_FLOOR,
+  type UnlockChecklist,
 } from '@ogwi/shared';
 import * as clock from '../../lib/clock.js';
+import * as compositionService from '../composition/composition.service.js';
 import * as masteryRepository from '../mastery/mastery.repository.js';
-import { mean, scoringRetrievability, weightedObjectiveMean } from '../mastery/mastery.service.js';
+import {
+  isDailyRolloverDue,
+  mean,
+  scoringRetrievability,
+  weightedObjectiveMean,
+} from '../mastery/mastery.service.js';
 import { computeCalibration } from './calibration.util.js';
 import { resolveCertaintyBand } from './certainty-band.util.js';
 import { normalCdf } from './normal-cdf.util.js';
 import * as readinessRepository from './readiness.repository.js';
-import type { CertaintyBand, ReadinessResult } from './readiness.types.js';
+import type {
+  CertaintyBand,
+  PublishedReadiness,
+  ReadinessResult,
+  ReadinessView,
+} from './readiness.types.js';
+import { buildUnlockChecklist } from './unlock-checklist.util.js';
 
 /**
  * Business logic only. Never touches req/res, never imports Prisma types.
@@ -203,4 +216,88 @@ async function computeForecast(
     itemsRemaining,
     paceItemsPerDay,
   };
+}
+
+/**
+ * The first-score checklist, evaluated live: it ticks as items are earned,
+ * rather than waiting for a publish point. It gates the odds; it isn't one.
+ */
+export async function evaluateUnlockChecklist(
+  learnerId: string,
+  qualificationId: string,
+): Promise<UnlockChecklist> {
+  const modules = await masteryRepository.findModulesForQualification(qualificationId);
+  const itemIds = modules.flatMap((m) => m.objectives.flatMap((o) => o.knowledgeItemIds));
+
+  const [states, completedTopics, submittedExamRuns] = await Promise.all([
+    masteryRepository.findItemMemoryStates(learnerId, itemIds),
+    compositionService.countCompletedTopics(learnerId, qualificationId),
+    readinessRepository.countSubmittedExamRuns(learnerId, qualificationId),
+  ]);
+
+  const modulesTouched = modules.filter((module) =>
+    module.objectives.some((objective) => objective.knowledgeItemIds.some((id) => states.has(id))),
+  ).length;
+
+  return buildUnlockChecklist({
+    completedTopics,
+    modulesTouched,
+    moduleCount: modules.length,
+    submittedExamRuns,
+  });
+}
+
+/**
+ * A publish point for the odds (Doc 2 B2: "recomputed only at publish
+ * points"). Appends one publication; the latest is what the learner sees.
+ *
+ * "No score exists at all until the learner completes the unlock checklist":
+ * a publication made before then stores every ingredient but no odds.
+ */
+export async function publishReadiness(
+  learnerId: string,
+  qualificationId: string,
+): Promise<PublishedReadiness> {
+  const passMark = await readinessRepository.findPassMark(qualificationId);
+  const [result, checklist] = await Promise.all([
+    computeReadiness(learnerId, qualificationId, passMark),
+    evaluateUnlockChecklist(learnerId, qualificationId),
+  ]);
+
+  const published: PublishedReadiness = {
+    ...result,
+    oddsPercent: checklist.unlocked ? result.oddsPercent : null,
+    celebrationEligible: checklist.unlocked && result.celebrationEligible,
+    unlocked: checklist.unlocked,
+    publishedAt: clock.now(),
+  };
+
+  await readinessRepository.createPublication(learnerId, qualificationId, published);
+  return published;
+}
+
+/**
+ * The odds as a learner sees them: the latest publication, plus the live
+ * checklist. A read writes nothing, except the daily rollover - the same rule
+ * and the same lazy materialisation as mastery's, so the two publish on the
+ * same schedule without either calling the other.
+ */
+export async function getReadiness(learnerId: string, qualificationId: string): Promise<ReadinessView> {
+  const [latest, lastReviewedAt, checklist] = await Promise.all([
+    readinessRepository.findLatestPublication(learnerId, qualificationId),
+    masteryRepository.findLastReviewedAt(learnerId, qualificationId),
+    evaluateUnlockChecklist(learnerId, qualificationId),
+  ]);
+
+  const rolloverDue = isDailyRolloverDue({
+    lastPublishedAt: latest?.publishedAt ?? null,
+    lastReviewedAt,
+    now: clock.now(),
+  });
+
+  if (rolloverDue) {
+    return { checklist, published: await publishReadiness(learnerId, qualificationId) };
+  }
+
+  return { checklist, published: latest };
 }

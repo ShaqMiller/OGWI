@@ -44,6 +44,7 @@ export async function deleteLearnerData(learnerId: string): Promise<Record<strin
     const publishedMastery = await tx.publishedMastery.deleteMany({ where: { learnerId } });
     // Exam run items go with their run (onDelete: Cascade).
     const examRuns = await tx.examRun.deleteMany({ where: { learnerId } });
+    const readinessPublications = await tx.readinessPublication.deleteMany({ where: { learnerId } });
     const clockOffsets = await tx.learnerClockOffset.deleteMany({ where: { learnerId } });
 
     return {
@@ -54,6 +55,7 @@ export async function deleteLearnerData(learnerId: string): Promise<Record<strin
       itemMemoryStates: itemMemoryStates.count,
       publishedMastery: publishedMastery.count,
       examRuns: examRuns.count,
+      readinessPublications: readinessPublications.count,
       clockOffsets: clockOffsets.count,
     };
   });

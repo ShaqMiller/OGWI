@@ -67,10 +67,10 @@ async function readMastery(learnerId: string): Promise<Mastery> {
 
 async function publish(learnerId: string): Promise<Mastery> {
   const res = await request(createApp())
-    .post('/api/mastery/demo-cert/publish')
+    .post('/api/publishing/demo-cert')
     .set('x-dev-learner-id', learnerId);
   expect(res.status).toBe(200);
-  return res.body;
+  return res.body.mastery;
 }
 
 function advanceClock(learnerId: string, seconds: number) {

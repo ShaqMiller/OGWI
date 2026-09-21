@@ -69,4 +69,14 @@ export const READINESS_CALIBRATION_HALF_LIFE_DAYS = 30;
  */
 export const READINESS_CALIBRATION_MIN_PROJECTION = 0.05;
 
+/**
+ * The first-score unlock checklist (Doc 2 B2): complete a topic, answer
+ * questions across two modules, complete one mini-mock. No odds are published
+ * until all three are done. The module requirement is capped at the
+ * qualification's module count - see unlock-checklist.util.ts.
+ */
+export const READINESS_UNLOCK_TOPICS_REQUIRED = 1;
+export const READINESS_UNLOCK_MODULES_REQUIRED = 2;
+export const READINESS_UNLOCK_EXAM_RUNS_REQUIRED = 1;
+
 export const READINESS_CONFIG_VERSION = 'readiness-calibrated-3';

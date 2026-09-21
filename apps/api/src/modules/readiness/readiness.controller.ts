@@ -7,11 +7,7 @@ export async function getReadiness(req: Request, res: Response): Promise<void> {
   const learnerId = req.learnerId as string;
 
   const qualification = await contentGraphService.getQualificationBySlug(qualificationSlug);
-  const readiness = await readinessService.computeReadiness(
-    learnerId,
-    qualification.id,
-    qualification.passMark,
-  );
+  const readiness = await readinessService.getReadiness(learnerId, qualification.id);
 
   res.status(200).json(readiness);
 }

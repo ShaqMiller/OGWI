@@ -2,7 +2,7 @@
 
 import { MASTERY_ROLLOVER_IDLE_MINUTES, type ModuleMastery } from '@ogwi/shared';
 import { useMastery } from '@/hooks/mastery/useMastery';
-import { usePublishMastery } from '@/hooks/mastery/usePublishMastery';
+import { usePublishSession } from '@/hooks/publishing/usePublishSession';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { formatPercent } from './format';
@@ -19,7 +19,7 @@ function gap(module: ModuleMastery): string {
 /** Live vs displayed mastery, side by side, so a publish point is visible when it happens. */
 export function MasteryCard({ slug }: { slug: string }) {
   const mastery = useMastery(slug);
-  const publish = usePublishMastery(slug);
+  const publish = usePublishSession(slug);
 
   return (
     <Card style={{ marginBottom: 'var(--space-4)' }}>

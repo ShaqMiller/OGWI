@@ -51,3 +51,39 @@ export const readinessResultSchema = z.object({
   breakdown: readinessBreakdownSchema,
 });
 export type ReadinessResult = z.infer<typeof readinessResultSchema>;
+
+/** One item of the first-score unlock checklist (Doc 2 B2). */
+export const unlockChecklistItemSchema = z.object({
+  key: z.enum(['first_topic', 'modules', 'first_exam_run']),
+  current: z.number().int().nonnegative(),
+  required: z.number().int().positive(),
+  done: z.boolean(),
+});
+export type UnlockChecklistItem = z.infer<typeof unlockChecklistItemSchema>;
+
+export const unlockChecklistSchema = z.object({
+  unlocked: z.boolean(),
+  items: z.array(unlockChecklistItemSchema),
+});
+export type UnlockChecklist = z.infer<typeof unlockChecklistSchema>;
+
+/**
+ * The odds as published at a publish point. While `unlocked` is false the
+ * checklist wasn't complete and `oddsPercent` is null - no score exists yet.
+ */
+export const publishedReadinessSchema = readinessResultSchema.extend({
+  unlocked: z.boolean(),
+  publishedAt: z.coerce.date(),
+});
+export type PublishedReadiness = z.infer<typeof publishedReadinessSchema>;
+
+/**
+ * GET /api/readiness/:slug. The checklist is live - it ticks as items are
+ * earned. The odds are the latest publication, or null before any publish
+ * point has been reached.
+ */
+export const readinessViewSchema = z.object({
+  checklist: unlockChecklistSchema,
+  published: publishedReadinessSchema.nullable(),
+});
+export type ReadinessView = z.infer<typeof readinessViewSchema>;

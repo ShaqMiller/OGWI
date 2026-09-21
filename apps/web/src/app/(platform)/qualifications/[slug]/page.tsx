@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useQualification } from '@/hooks/content-graph/useQualification';
 import { useKnowledgeItemPrompt } from '@/hooks/content-graph/useKnowledgeItemPrompt';
 import { useMastery } from '@/hooks/mastery/useMastery';
-import { usePublishMastery } from '@/hooks/mastery/usePublishMastery';
+import { usePublishSession } from '@/hooks/publishing/usePublishSession';
 import { useNextSession } from '@/hooks/composition/useNextSession';
 import { useEconomyBalance } from '@/hooks/economy/useEconomyBalance';
 import { useSubmitAnswer } from '@/hooks/scheduler/useSubmitAnswer';
@@ -37,7 +37,7 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
   const submitAnswer = useSubmitAnswer(slug);
   const currentTopicId = nextSession.data?.currentTopic?.topicId ?? null;
   const topicKeyPoints = useTopicKeyPoints(currentTopicId);
-  const publishMastery = usePublishMastery(slug);
+  const publishMastery = usePublishSession(slug);
   const { mutate: publish } = publishMastery;
 
   // Finishing a topic is a session end (Doc 2 C4): composition moves on to the

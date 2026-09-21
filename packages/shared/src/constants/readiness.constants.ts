@@ -19,8 +19,24 @@ export const READINESS_SIGMA_EVIDENCE_BASE = 0.08;
 /** Below this odds, the raw number is withheld for the "climb" framing. */
 export const READINESS_DISPLAY_WITHHOLD_THRESHOLD = 0.2;
 
-/** The one-time "you'd likely pass" celebration threshold. */
+/**
+ * The one-time celebration (Doc 2 B2): fires on a rising crossing of this
+ * threshold, with certainty at MIN_BAND or better.
+ */
 export const READINESS_CELEBRATION_THRESHOLD = 0.8;
+export const READINESS_CELEBRATION_MIN_BAND = 'fair' as const;
+
+/** The forecast freezes at its last value after this many fully quiet days (Doc 2 B2). */
+export const READINESS_FORECAST_FREEZE_QUIET_DAYS = 14;
+
+/**
+ * The next action (Doc 2 B2). "Certainty-band gains count as improvement", but
+ * the spec gives no exchange rate between a band step and odds - one step is
+ * valued as this much odds (a default). A simulated session covers this many
+ * questions, matching one composed quiz.
+ */
+export const READINESS_NEXT_ACTION_BAND_STEP_VALUE = 0.1;
+export const READINESS_NEXT_ACTION_SESSION_ITEMS = 8;
 
 /**
  * Certainty band thresholds. Doc 2 B2: "Solid = weighted coverage >=70% and

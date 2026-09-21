@@ -1,26 +1,41 @@
 import {
+  DESIRED_RETENTION,
   PACE_HALF_LIFE_DAYS,
   PACE_WINDOW_DAYS,
   READINESS_CELEBRATION_THRESHOLD,
   READINESS_DISPLAY_WITHHOLD_THRESHOLD,
   READINESS_FAIR_RUN_WINDOW_DAYS,
+  READINESS_NEXT_ACTION_SESSION_ITEMS,
   READINESS_PROJECTION_DAYS,
+  READINESS_SOLID_RUN_COUNT,
+  READINESS_SOLID_RUN_WINDOW_DAYS,
+  type NextAction,
+  type SigmaComponents,
   type UnlockChecklist,
 } from '@ogwi/shared';
 import * as clock from '../../lib/clock.js';
 import * as compositionService from '../composition/composition.service.js';
+import type { BiggestOpportunity } from '../mastery/biggest-opportunity.util.js';
 import * as masteryRepository from '../mastery/mastery.repository.js';
-import type { ModuleWithItems } from '../mastery/mastery.types.js';
-import type { PersistedCardFields } from '../scheduler/fsrs.util.js';
 import {
+  findBiggestOpportunity,
   isDailyRolloverDue,
   mean,
   scoringRetrievability,
   weightedObjectiveMean,
 } from '../mastery/mastery.service.js';
-import { computeCalibration } from './calibration.util.js';
+import type { ModuleWithItems } from '../mastery/mastery.types.js';
+import { liveRetrievability, type PersistedCardFields } from '../scheduler/fsrs.util.js';
+import { computeCalibration, type Calibration, type CalibrationRunInput } from './calibration.util.js';
 import { resolveCertaintyBand } from './certainty-band.util.js';
+import {
+  CERTAINTY_BAND_RANK,
+  chooseNextAction,
+  scoreCandidate,
+  withCorrectAnswers,
+} from './next-action.util.js';
 import { normalCdf } from './normal-cdf.util.js';
+import { decideCelebration, isForecastFrozen } from './publication-rules.util.js';
 import * as readinessRepository from './readiness.repository.js';
 import type {
   CertaintyBand,
@@ -138,6 +153,52 @@ export async function computeProjectedScore(
   return projectFrom(inputs, clock.now()).projectedScore;
 }
 
+interface Evidence {
+  inputs: ProjectionInputs;
+  calibrationRuns: CalibrationRunInput[];
+  examRunDates: Date[];
+  passMark: number;
+  now: Date;
+}
+
+interface OddsEvaluation {
+  projection: Projection;
+  calibration: Calibration;
+  calibratedScore: number;
+  sigma: number;
+  sigmaComponents: SigmaComponents;
+  oddsRaw: number;
+  certaintyBand: CertaintyBand;
+}
+
+/**
+ * Steps 1-3, pure: projection, calibration, sigma, odds and certainty from a
+ * given body of evidence. Pure so the next action can ask "what if" by
+ * handing it altered evidence.
+ */
+function evaluateOdds(evidence: Evidence): OddsEvaluation {
+  const projection = projectFrom(evidence.inputs, evidence.now);
+  const calibration = computeCalibration(evidence.calibrationRuns, evidence.now);
+  const calibratedScore = Math.min(1, projection.projectedScore * calibration.ratio);
+
+  const { sigma, components: sigmaComponents } = computeSigma({
+    weightedCoverage: projection.weightedCoverage,
+    projectedScore: projection.projectedScore,
+    calibration,
+    itemProbabilities: projection.itemProbabilities,
+  });
+
+  return {
+    projection,
+    calibration,
+    calibratedScore,
+    sigma,
+    sigmaComponents,
+    oddsRaw: normalCdf((calibratedScore - evidence.passMark) / sigma),
+    certaintyBand: resolveCertaintyBand(projection.weightedCoverage, evidence.examRunDates, evidence.now),
+  };
+}
+
 export async function computeReadiness(
   learnerId: string,
   qualificationId: string,
@@ -145,7 +206,7 @@ export async function computeReadiness(
 ): Promise<ReadinessResult> {
   const now = clock.now();
 
-  const [inputs, calibrationRuns, examRunDates] = await Promise.all([
+  const [inputs, calibrationRuns, examRunDates, biggestOpportunity] = await Promise.all([
     loadProjectionInputs(learnerId, qualificationId),
     readinessRepository.findCalibrationRuns(learnerId, qualificationId),
     readinessRepository.findSubmittedExamRunDates(
@@ -153,26 +214,20 @@ export async function computeReadiness(
       qualificationId,
       addDays(now, -READINESS_FAIR_RUN_WINDOW_DAYS),
     ),
+    findBiggestOpportunity(learnerId, qualificationId, passMark),
   ]);
 
-  const projection = projectFrom(inputs, now);
-  const calibration = computeCalibration(calibrationRuns, now);
-  const calibratedScore = Math.min(1, projection.projectedScore * calibration.ratio);
+  const evidence: Evidence = { inputs, calibrationRuns, examRunDates, passMark, now };
+  const odds = evaluateOdds(evidence);
+  const { projection, calibration, calibratedScore, sigma, sigmaComponents, oddsRaw, certaintyBand } = odds;
   const { weightedCoverage } = projection;
 
-  const { sigma, components: sigmaComponents } = computeSigma({
-    weightedCoverage,
-    projectedScore: projection.projectedScore,
-    calibration,
-    itemProbabilities: projection.itemProbabilities,
-  });
-  const oddsRaw = normalCdf((calibratedScore - passMark) / sigma);
   const withheld = oddsRaw < READINESS_DISPLAY_WITHHOLD_THRESHOLD;
-
-  const certaintyBand: CertaintyBand = resolveCertaintyBand(weightedCoverage, examRunDates, now);
 
   const itemsRemaining = projection.itemCount - projection.coveredCount;
   const forecast = await computeForecast(learnerId, qualificationId, itemsRemaining, now);
+
+  const nextActionCandidates = simulateNextActions(evidence, odds, biggestOpportunity);
 
   return {
     oddsPercent: withheld ? null : Math.round(oddsRaw * 100),
@@ -183,6 +238,7 @@ export async function computeReadiness(
     qualityRatio: weightedCoverage > 0 ? calibratedScore / weightedCoverage : 0,
     celebrationEligible: oddsRaw >= READINESS_CELEBRATION_THRESHOLD,
     forecast,
+    nextAction: chooseNextAction(nextActionCandidates),
     // Every ingredient of the number, so it can be walked through piece by
     // piece rather than taken on trust.
     breakdown: {
@@ -195,8 +251,112 @@ export async function computeReadiness(
       passMark,
       oddsRaw,
       calibrationRuns: calibration.runs,
+      nextActionCandidates,
     },
   };
+}
+
+/**
+ * The next action's three candidates (Doc 2 B2), each simulated against the
+ * learner's real evidence with one thing changed:
+ *   (a) refresh - every item now due for review answered correctly, now.
+ *   (b) biggest opportunity - a session on that module: its unseen items
+ *       first, then its weakest, up to one quiz's worth, answered correctly.
+ *   (c) mini-mock - offered when exam evidence is missing or stale (fewer
+ *       runs in the last 30 days than a solid band needs), and simulated as a
+ *       run that goes exactly as the calibration expects: the gain is the
+ *       narrower uncertainty and any band step.
+ * Each simulation answers correctly because the question is "what would doing
+ * this do for you" - the realistic best case, not a prediction.
+ */
+function simulateNextActions(
+  evidence: Evidence,
+  current: OddsEvaluation,
+  biggestOpportunity: BiggestOpportunity | null,
+): NextAction[] {
+  const { inputs, now } = evidence;
+  const candidates: NextAction[] = [];
+
+  const outcome = (simulated: OddsEvaluation) => ({
+    oddsDelta: simulated.oddsRaw - current.oddsRaw,
+    bandSteps: CERTAINTY_BAND_RANK[simulated.certaintyBand] - CERTAINTY_BAND_RANK[current.certaintyBand],
+  });
+
+  const answeredCorrectly = (itemIds: string[]) =>
+    evaluateOdds({
+      ...evidence,
+      inputs: { ...inputs, ...withCorrectAnswers(inputs.states, inputs.everCorrect, itemIds, now) },
+    });
+
+  // (a) The largest decayed pool: everything the scheduler would call due.
+  const due = [...inputs.states]
+    .filter(([, state]) => liveRetrievability(state, now) <= DESIRED_RETENTION)
+    .map(([itemId]) => itemId);
+  if (due.length > 0) {
+    const { oddsDelta, bandSteps } = outcome(answeredCorrectly(due));
+    const noun = due.length === 1 ? 'question' : 'questions';
+    candidates.push(
+      scoreCandidate('refresh', `Refreshing the ${due.length} ${noun} due for review would lift this most.`, oddsDelta, bandSteps),
+    );
+  }
+
+  // (b) A session on the Biggest Opportunity.
+  const opportunityModule = biggestOpportunity
+    ? inputs.modules.find((module) => module.id === biggestOpportunity.moduleId)
+    : undefined;
+  if (biggestOpportunity && opportunityModule) {
+    const recall = (itemId: string) => {
+      const state = inputs.states.get(itemId);
+      return state ? liveRetrievability(state, now) : -1; // unseen first
+    };
+    const session = opportunityModule.objectives
+      .flatMap((objective) => objective.knowledgeItemIds)
+      .sort((a, b) => recall(a) - recall(b))
+      .slice(0, READINESS_NEXT_ACTION_SESSION_ITEMS);
+
+    const { oddsDelta, bandSteps } = outcome(answeredCorrectly(session));
+    const share = Math.round(biggestOpportunity.blueprintWeight * 100);
+    candidates.push(
+      scoreCandidate(
+        'biggest_opportunity',
+        `A session on ${biggestOpportunity.moduleName} would lift this most - it's ${share}% of the exam.`,
+        oddsDelta,
+        bandSteps,
+      ),
+    );
+  }
+
+  // (c) A mini-mock, when exam evidence is missing or stale.
+  const solidWindowStart = now.getTime() - READINESS_SOLID_RUN_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+  const recentRuns = evidence.examRunDates.filter((date) => date.getTime() >= solidWindowStart).length;
+  if (recentRuns < READINESS_SOLID_RUN_COUNT) {
+    const expectedRatio = current.calibration.meanRatio ?? 1;
+    const expectedScore = Math.min(1, current.projection.projectedScore * expectedRatio);
+    const simulated = evaluateOdds({
+      ...evidence,
+      calibrationRuns: [
+        ...evidence.calibrationRuns,
+        {
+          submittedAt: now,
+          correctCount: Math.round(expectedScore * 1000),
+          scoredCount: 1000,
+          projectedScore: current.projection.projectedScore,
+        },
+      ],
+      examRunDates: [...evidence.examRunDates, now],
+    });
+
+    const { oddsDelta, bandSteps } = outcome(simulated);
+    const line =
+      simulated.certaintyBand === 'solid' && bandSteps > 0
+        ? 'One mini-mock would make this number solid.'
+        : bandSteps > 0
+          ? 'One mini-mock would firm this number up.'
+          : 'A mini-mock would sharpen this number.';
+    candidates.push(scoreCandidate('mini_mock', line, oddsDelta, bandSteps));
+  }
+
+  return candidates;
 }
 
 async function computeForecast(
@@ -225,10 +385,10 @@ async function computeForecast(
   const paceItemsPerDay = weightTotal > 0 ? weightedSum / weightTotal : 0;
 
   if (itemsRemaining <= 0) {
-    return { expectedFinishDate: now.toISOString().slice(0, 10), itemsRemaining, paceItemsPerDay };
+    return { expectedFinishDate: now.toISOString().slice(0, 10), itemsRemaining, paceItemsPerDay, frozen: false };
   }
   if (paceItemsPerDay <= 0) {
-    return { expectedFinishDate: null, itemsRemaining, paceItemsPerDay };
+    return { expectedFinishDate: null, itemsRemaining, paceItemsPerDay, frozen: false };
   }
 
   const daysToFinish = itemsRemaining / paceItemsPerDay;
@@ -236,6 +396,7 @@ async function computeForecast(
     expectedFinishDate: addDays(now, daysToFinish).toISOString().slice(0, 10),
     itemsRemaining,
     paceItemsPerDay,
+    frozen: false,
   };
 }
 
@@ -280,17 +441,39 @@ export async function publishReadiness(
   qualificationId: string,
 ): Promise<PublishedReadiness> {
   const passMark = await readinessRepository.findPassMark(qualificationId);
-  const [result, checklist] = await Promise.all([
+  const [result, checklist, previous, alreadyCelebrated, everUnlocked, lastReviewedAt] = await Promise.all([
     computeReadiness(learnerId, qualificationId, passMark),
     evaluateUnlockChecklist(learnerId, qualificationId),
+    readinessRepository.findLatestPublication(learnerId, qualificationId),
+    readinessRepository.hasCelebrated(learnerId, qualificationId),
+    readinessRepository.hasUnlockedPublication(learnerId, qualificationId),
+    masteryRepository.findLastReviewedAt(learnerId, qualificationId),
   ]);
+
+  const now = clock.now();
+  const { unlocked } = checklist;
+  const frozenForecast =
+    previous !== null && isForecastFrozen({ lastReviewedAt, now })
+      ? { ...previous.forecast, frozen: true }
+      : null;
 
   const published: PublishedReadiness = {
     ...result,
-    oddsPercent: checklist.unlocked ? result.oddsPercent : null,
-    celebrationEligible: checklist.unlocked && result.celebrationEligible,
-    unlocked: checklist.unlocked,
-    publishedAt: clock.now(),
+    oddsPercent: unlocked ? result.oddsPercent : null,
+    celebrationEligible: unlocked && result.celebrationEligible,
+    forecast: frozenForecast ?? result.forecast,
+    unlocked,
+    // Doc 2 B2's reveal: "Here's your first readiness score - it sharpens with
+    // everything you do." True on exactly one publication.
+    firstScore: unlocked && !everUnlocked,
+    celebrate: decideCelebration({
+      unlocked,
+      oddsRaw: result.breakdown.oddsRaw,
+      certaintyBand: result.certaintyBand,
+      previous: previous && { unlocked: previous.unlocked, oddsRaw: previous.breakdown.oddsRaw },
+      alreadyCelebrated,
+    }),
+    publishedAt: now,
   };
 
   await readinessRepository.createPublication(learnerId, qualificationId, published);

@@ -2,6 +2,7 @@ import {
   READINESS_CONFIG_VERSION,
   READINESS_MIN_RUN_QUESTION_COUNT,
   type CalibrationRun,
+  type NextAction,
   type SigmaComponents,
 } from '@ogwi/shared';
 import { Prisma } from '@prisma/client';
@@ -152,6 +153,8 @@ export async function createPublication(
       qualificationId,
       publishedAt: published.publishedAt,
       unlocked: published.unlocked,
+      firstScore: published.firstScore,
+      celebrated: published.celebrate,
       oddsPercent: published.oddsPercent,
       withheld: published.withheld,
       weightedCoveragePercent: published.weightedCoveragePercent,
@@ -162,6 +165,11 @@ export async function createPublication(
       forecastFinishDate: forecast.expectedFinishDate,
       forecastItemsRemaining: forecast.itemsRemaining,
       forecastPaceItemsPerDay: forecast.paceItemsPerDay,
+      forecastFrozen: forecast.frozen,
+      nextAction: {
+        chosen: published.nextAction,
+        candidates: breakdown.nextActionCandidates,
+      } as Prisma.InputJsonValue,
       projectedScore: breakdown.projectedScore,
       calibrationRatio: breakdown.calibrationRatio,
       meanRatio: breakdown.meanRatio,
@@ -190,10 +198,13 @@ export async function findLatestPublication(
 
   if (!row) return null;
 
+  const storedNextAction = row.nextAction as { chosen: NextAction | null; candidates: NextAction[] | null } | null;
   const storedRuns = row.calibrationRuns as (Omit<CalibrationRun, 'submittedAt'> & { submittedAt: string })[];
 
   return {
     unlocked: row.unlocked,
+    firstScore: row.firstScore,
+    celebrate: row.celebrated,
     publishedAt: row.publishedAt,
     oddsPercent: row.oddsPercent,
     withheld: row.withheld,
@@ -206,7 +217,9 @@ export async function findLatestPublication(
       expectedFinishDate: row.forecastFinishDate,
       itemsRemaining: row.forecastItemsRemaining,
       paceItemsPerDay: row.forecastPaceItemsPerDay,
+      frozen: row.forecastFrozen,
     },
+    nextAction: storedNextAction?.chosen ?? null,
     breakdown: {
       projectedScore: row.projectedScore,
       calibrationRatio: row.calibrationRatio,
@@ -217,6 +230,17 @@ export async function findLatestPublication(
       passMark: row.passMark,
       oddsRaw: row.oddsRaw,
       calibrationRuns: storedRuns.map((run) => ({ ...run, submittedAt: new Date(run.submittedAt) })),
+      nextActionCandidates: storedNextAction?.candidates ?? null,
     },
   };
+}
+
+/** Whether the one-time celebration has already fired for this learner and qualification. */
+export async function hasCelebrated(learnerId: string, qualificationId: string): Promise<boolean> {
+  return (await prisma.readinessPublication.count({ where: { learnerId, qualificationId, celebrated: true } })) > 0;
+}
+
+/** Whether any earlier publication carried a score - so the reveal happens exactly once. */
+export async function hasUnlockedPublication(learnerId: string, qualificationId: string): Promise<boolean> {
+  return (await prisma.readinessPublication.count({ where: { learnerId, qualificationId, unlocked: true } })) > 0;
 }

@@ -1,6 +1,7 @@
 import { MASTERY_ROLLOVER_IDLE_MINUTES, type ModuleMastery } from '@ogwi/shared';
 import * as clock from '../../lib/clock.js';
 import { liveRetrievability, type PersistedCardFields } from '../scheduler/fsrs.util.js';
+import { pickBiggestOpportunity, type BiggestOpportunity } from './biggest-opportunity.util.js';
 import * as masteryRepository from './mastery.repository.js';
 
 /**
@@ -211,4 +212,31 @@ export function isDailyRolloverDue(params: {
 
   const startOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   return lastPublishedAt === null || lastPublishedAt.getTime() < startOfToday;
+}
+
+/**
+ * The Biggest Opportunity (Doc 2 B1) from the learner's DISPLAYED mastery -
+ * the published layer drives it by the spec's honesty split. A module never
+ * published counts as 0. Null when every module is at or above the pass mark.
+ */
+export async function findBiggestOpportunity(
+  learnerId: string,
+  qualificationId: string,
+  passMark: number,
+): Promise<BiggestOpportunity | null> {
+  const modules = await masteryRepository.findModulesForQualification(qualificationId);
+  const published = await masteryRepository.findPublishedRecords(
+    learnerId,
+    modules.map((module) => module.id),
+  );
+
+  return pickBiggestOpportunity(
+    modules.map((module) => ({
+      moduleId: module.id,
+      moduleName: module.name,
+      blueprintWeight: module.blueprintWeight,
+      displayedScore: published.get(module.id)?.displayedScore ?? 0,
+    })),
+    passMark,
+  );
 }

@@ -15,6 +15,20 @@ export const calibrationRunSchema = z.object({
 });
 export type CalibrationRun = z.infer<typeof calibrationRunSchema>;
 
+/**
+ * One candidate for the next action (Doc 2 B2), with its simulated effect:
+ * the change in P(pass), the certainty-band steps gained, and the combined
+ * score the winner is chosen by.
+ */
+export const nextActionSchema = z.object({
+  kind: z.enum(['refresh', 'biggest_opportunity', 'mini_mock']),
+  line: z.string(),
+  oddsDelta: z.number(),
+  bandSteps: z.number().int(),
+  score: z.number(),
+});
+export type NextAction = z.infer<typeof nextActionSchema>;
+
 /** sigma's four ingredients, each in exam-score units - see readiness/sigma.util.ts. */
 export const sigmaComponentsSchema = z.object({
   coverage: z.number().nonnegative(),
@@ -43,6 +57,8 @@ export const readinessBreakdownSchema = z.object({
   /** P(pass) before rounding or withholding. */
   oddsRaw: z.number().min(0).max(1),
   calibrationRuns: z.array(calibrationRunSchema),
+  /** Every next-action candidate as simulated. Null on publications made before them. */
+  nextActionCandidates: z.array(nextActionSchema).nullable(),
 });
 export type ReadinessBreakdown = z.infer<typeof readinessBreakdownSchema>;
 
@@ -58,7 +74,11 @@ export const readinessResultSchema = z.object({
     expectedFinishDate: z.string().nullable(),
     itemsRemaining: z.number().int().nonnegative(),
     paceItemsPerDay: z.number().nonnegative(),
+    /** True after 14+ fully quiet days: held at its last value until the learner answers again. */
+    frozen: z.boolean(),
   }),
+  /** One plain line naming what would help most, or null when nothing would. */
+  nextAction: nextActionSchema.nullable(),
   breakdown: readinessBreakdownSchema,
 });
 export type ReadinessResult = z.infer<typeof readinessResultSchema>;
@@ -84,6 +104,10 @@ export type UnlockChecklist = z.infer<typeof unlockChecklistSchema>;
  */
 export const publishedReadinessSchema = readinessResultSchema.extend({
   unlocked: z.boolean(),
+  /** The first publication ever to carry a score - time for the reveal copy. */
+  firstScore: z.boolean(),
+  /** This publication crossed 80% and fired the one-time celebration. */
+  celebrate: z.boolean(),
   publishedAt: z.coerce.date(),
 });
 export type PublishedReadiness = z.infer<typeof publishedReadinessSchema>;

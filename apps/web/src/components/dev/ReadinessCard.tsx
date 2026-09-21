@@ -10,7 +10,7 @@ const muted = { color: 'var(--color-text-muted)', fontSize: '0.85rem' };
 const cell = { padding: '0.35rem 0.5rem', borderBottom: '1px solid var(--color-border)', textAlign: 'left' as const };
 const numeric = { ...cell, fontVariantNumeric: 'tabular-nums' as const };
 
-function Row({ label, value, note }: { label: string; value: string; note?: string }) {
+function Row({ label, value, note }: { label: string; value: string; note?: string | undefined }) {
   return (
     <tr>
       <td style={cell}>{label}</td>
@@ -91,9 +91,56 @@ export function ReadinessCard({ slug }: { slug: string }) {
               />
               <Row label="Shown to the learner" value={shownOdds(published)} />
               <Row label="Certainty" value={published.certaintyBand} note="needs coverage and recent exam runs" />
+              <Row
+                label="Next action"
+                value={published.nextAction ? published.nextAction.kind.replace(/_/g, ' ') : 'none'}
+                note={published.nextAction?.line ?? 'nothing would improve the odds or the certainty'}
+              />
+              <Row
+                label="Forecast"
+                value={published.forecast.frozen ? 'frozen' : 'live'}
+                note={published.forecast.frozen ? '14+ quiet days - held at its last value' : undefined}
+              />
+              <Row label="First-score reveal" value={published.firstScore ? 'yes, this publication' : 'no'} />
+              <Row label="Celebration" value={published.celebrate ? 'fired on this publication' : 'no'} note="once ever, on a rising crossing of 80% with fair+ certainty" />
             </tbody>
           </table>
         </div>
+      )}
+
+      {breakdown?.nextActionCandidates && breakdown.nextActionCandidates.length > 0 && (
+        <>
+          <h3 style={{ margin: 'var(--space-4) 0 var(--space-2)', fontSize: '0.95rem' }}>
+            Next-action candidates, simulated
+          </h3>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+              <thead>
+                <tr>
+                  {['Candidate', 'Odds change', 'Band steps', 'Score'].map((heading) => (
+                    <th key={heading} style={{ ...cell, color: 'var(--color-text-muted)', fontWeight: 500 }}>
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {breakdown.nextActionCandidates.map((candidate) => (
+                  <tr key={candidate.kind}>
+                    <td style={cell}>{candidate.line}</td>
+                    <td style={numeric}>
+                      {candidate.oddsDelta >= 0 ? '+' : ''}
+                      {(candidate.oddsDelta * 100).toFixed(1)} pts
+                    </td>
+                    <td style={numeric}>{candidate.bandSteps}</td>
+                    <td style={numeric}>{candidate.score.toFixed(3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p style={muted}>Highest score wins; ties prefer the mini-mock, then the refresh. A band step counts as 10 points.</p>
+        </>
       )}
 
       {breakdown && breakdown.calibrationRuns.length > 0 && (

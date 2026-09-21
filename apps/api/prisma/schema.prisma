@@ -645,6 +645,10 @@ model ReadinessPublication {
   publishedAt     DateTime
 
   unlocked                Boolean
+  // The first publication with a score (the reveal), and the one that fired
+  // the one-time celebration. Each is true on at most one row.
+  firstScore              Boolean  @default(false)
+  celebrated              Boolean  @default(false)
   oddsPercent             Int?
   withheld                Boolean
   weightedCoveragePercent Int
@@ -656,6 +660,10 @@ model ReadinessPublication {
   forecastFinishDate      String?
   forecastItemsRemaining  Int
   forecastPaceItemsPerDay Float
+  // Held at its last value after 14+ quiet days.
+  forecastFrozen          Boolean  @default(false)
+  // { chosen, candidates } - the next action and every simulated candidate.
+  nextAction              Json?
 
   // The breakdown (Doc 2 B2's ingredients), as 0-1 fractions.
   projectedScore   Float

@@ -25,13 +25,6 @@ const CERTAINTY_LABEL = {
   solid: 'Solid',
 } as const;
 
-/** Names the fix, without the handover's banned "behind"/"overdue" framing. */
-const CERTAINTY_NEXT_STEP = {
-  early: 'Sit an exam simulation to firm this up.',
-  fair: 'One more exam simulation would make this solid.',
-  solid: null,
-} as const;
-
 /**
  * "2026-09-23" -> "23 Sep". Read as UTC so the day can't shift across a
  * timezone boundary.
@@ -96,8 +89,17 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
       */}
       {published?.forecast.expectedFinishDate && published.forecast.itemsRemaining > 0 && (
         <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: 'var(--space-2) 0 0' }}>
-          At this pace you&apos;ll have worked through the whole course by around{' '}
-          {formatShortDate(published.forecast.expectedFinishDate)}.
+          {published.forecast.frozen ? (
+            <>
+              At your last pace you&apos;d have worked through the whole course by around{' '}
+              {formatShortDate(published.forecast.expectedFinishDate)} - picks back up when you do.
+            </>
+          ) : (
+            <>
+              At this pace you&apos;ll have worked through the whole course by around{' '}
+              {formatShortDate(published.forecast.expectedFinishDate)}.
+            </>
+          )}
         </p>
       )}
 
@@ -108,6 +110,16 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
 
       {published?.unlocked && (
         <div style={{ marginTop: 'var(--space-3)', fontSize: '0.9rem' }}>
+          {published.celebrate && (
+            <p style={{ margin: '0 0 var(--space-2)', fontWeight: 600 }}>
+              You&apos;d very likely pass if you sat it soon.
+            </p>
+          )}
+          {published.firstScore && (
+            <p style={{ margin: '0 0 var(--space-2)', color: 'var(--color-text-muted)' }}>
+              Here&apos;s your first readiness score - it sharpens with everything you do.
+            </p>
+          )}
           {published.withheld ? (
             <>
               Odds of passing: <Badge>under 20%</Badge> — on track at{' '}
@@ -119,12 +131,13 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
               <Badge tone={CERTAINTY_TONE[published.certaintyBand]}>
                 {CERTAINTY_LABEL[published.certaintyBand]}
               </Badge>
-              {CERTAINTY_NEXT_STEP[published.certaintyBand] && (
-                <div style={{ color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
-                  {CERTAINTY_NEXT_STEP[published.certaintyBand]}
-                </div>
-              )}
             </>
+          )}
+          {/* Any gap renders only as the next action (Doc 2 B2). */}
+          {published.nextAction && (
+            <div style={{ color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
+              {published.nextAction.line}
+            </div>
           )}
         </div>
       )}

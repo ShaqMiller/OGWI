@@ -117,7 +117,7 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
           Updates when you end a session or finish a topic.
         </p>
         {mastery.isLoading && <p>Loading...</p>}
-        {mastery.data?.map((m) => (
+        {mastery.data?.modules.map((m) => (
           <ModuleMasteryBar key={m.moduleId} mastery={m} />
         ))}
       </Card>

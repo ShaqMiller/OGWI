@@ -52,7 +52,7 @@ export function MasteryCard({ slug }: { slug: string }) {
               </tr>
             </thead>
             <tbody>
-              {mastery.data.map((module) => (
+              {mastery.data.modules.map((module) => (
                 <tr key={module.moduleId}>
                   <td style={cell}>{module.moduleName}</td>
                   <td style={cell}>{formatPercent(module.liveScore)}</td>

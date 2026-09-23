@@ -95,11 +95,21 @@ export async function findItemsEverAnsweredCorrectly(
 export async function findPublishedRecord(
   learnerId: string,
   moduleId: string,
-): Promise<{ displayedScore: number; lastPublishedAt: Date } | null> {
+): Promise<{ displayedScore: number; lastPublishedAt: Date; everMastered: boolean } | null> {
   return prisma.publishedMastery.findUnique({
     where: { learnerId_moduleId: { learnerId, moduleId } },
-    select: { displayedScore: true, lastPublishedAt: true },
+    select: { displayedScore: true, lastPublishedAt: true, everMastered: true },
   });
+}
+
+/** The qualification's pass mark - its record is the source of truth for every threshold. */
+export async function findPassMark(qualificationId: string): Promise<number> {
+  const row = await prisma.qualification.findUniqueOrThrow({
+    where: { id: qualificationId },
+    select: { passMark: true },
+  });
+
+  return Number(row.passMark);
 }
 
 export async function upsertPublishedScore(
@@ -107,6 +117,7 @@ export async function upsertPublishedScore(
   moduleId: string,
   displayedScore: number,
   publishedAt: Date,
+  mastered: boolean,
 ): Promise<void> {
   // Both paths take the time from the caller, which read it from the same
   // clock publishModuleMastery compares against. Leaving create to the
@@ -114,26 +125,36 @@ export async function upsertPublishedScore(
   // every later comparison used Node's.
   await prisma.publishedMastery.upsert({
     where: { learnerId_moduleId: { learnerId, moduleId } },
-    create: { learnerId, moduleId, displayedScore, lastPublishedAt: publishedAt },
-    update: { displayedScore, lastPublishedAt: publishedAt },
+    create: { learnerId, moduleId, displayedScore, lastPublishedAt: publishedAt, everMastered: mastered },
+    // everMastered only ever turns on: reaching the pass mark is a fact about
+    // the learner's history, not a state that decay takes back.
+    update: {
+      displayedScore,
+      lastPublishedAt: publishedAt,
+      ...(mastered ? { everMastered: true } : {}),
+    },
   });
 }
 
 export async function findPublishedRecords(
   learnerId: string,
   moduleIds: string[],
-): Promise<Map<string, { displayedScore: number; lastPublishedAt: Date }>> {
+): Promise<Map<string, { displayedScore: number; lastPublishedAt: Date; everMastered: boolean }>> {
   if (moduleIds.length === 0) return new Map();
 
   const rows = await prisma.publishedMastery.findMany({
     where: { learnerId, moduleId: { in: moduleIds } },
-    select: { moduleId: true, displayedScore: true, lastPublishedAt: true },
+    select: { moduleId: true, displayedScore: true, lastPublishedAt: true, everMastered: true },
   });
 
   return new Map(
     rows.map((row) => [
       row.moduleId,
-      { displayedScore: row.displayedScore, lastPublishedAt: row.lastPublishedAt },
+      {
+        displayedScore: row.displayedScore,
+        lastPublishedAt: row.lastPublishedAt,
+        everMastered: row.everMastered,
+      },
     ]),
   );
 }

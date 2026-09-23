@@ -60,7 +60,7 @@ describe('publishModuleMastery', () => {
 
     const scores = await masteryService.computeLiveModuleMastery(learnerId, qualificationId);
     const liveScore = scores.find((m) => m.moduleId === moduleId)?.liveScore ?? 0;
-    const displayed = await masteryService.publishModuleMastery(learnerId, moduleId, liveScore);
+    const displayed = await masteryService.publishModuleMastery(learnerId, moduleId, liveScore, 0.7);
 
     expect(displayed).toBeCloseTo(liveScore, 10);
   });
@@ -68,10 +68,10 @@ describe('publishModuleMastery', () => {
   it('eases a decline instead of dropping the displayed score immediately', async () => {
     const learnerId = randomUUID();
 
-    await masteryService.publishModuleMastery(learnerId, moduleId, 0.8);
+    await masteryService.publishModuleMastery(learnerId, moduleId, 0.8, 0.7);
     // Simulated decline, called immediately after (~0 elapsed time) - the
     // 7-day half-life means almost none of the drop should show up yet.
-    const displayed = await masteryService.publishModuleMastery(learnerId, moduleId, 0.2);
+    const displayed = await masteryService.publishModuleMastery(learnerId, moduleId, 0.2, 0.7);
 
     expect(displayed).toBeGreaterThan(0.79);
     expect(displayed).toBeLessThanOrEqual(0.8);

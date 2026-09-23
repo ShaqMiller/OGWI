@@ -78,8 +78,19 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
       </div>
 
       {mastery.isLoading && <p>Loading mastery...</p>}
-      {mastery.data?.length === 0 && <p>No modules yet.</p>}
-      {mastery.data?.map((m) => <ModuleMasteryBar key={m.moduleId} mastery={m} />)}
+      {mastery.data?.modules.length === 0 && <p>No modules yet.</p>}
+      {mastery.data?.modules.map((m) => <ModuleMasteryBar key={m.moduleId} mastery={m} />)}
+
+      {/* Doc 2 B1's Biggest Opportunity, with its leverage framing. */}
+      {mastery.data?.biggestOpportunity && (
+        <p style={{ fontSize: '0.9rem', margin: 'var(--space-2) 0 0' }}>
+          Biggest opportunity: <strong>{mastery.data.biggestOpportunity.moduleName}</strong>{' '}
+          <span style={{ color: 'var(--color-text-muted)' }}>
+            - it&apos;s {mastery.data.biggestOpportunity.examSharePercent}% of the exam, and{' '}
+            {mastery.data.biggestOpportunity.pointsBelowPassMark} points of it are still to come.
+          </span>
+        </p>
+      )}
 
       {/*
         A forecast of working through the material, NOT of being ready to pass.

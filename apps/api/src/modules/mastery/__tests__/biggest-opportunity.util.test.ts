@@ -14,6 +14,7 @@ describe('pickBiggestOpportunity', () => {
 
     expect(pick?.moduleId).toBe('heavy');
     expect(pick?.drag).toBeCloseTo(0.04, 10);
+    expect(pick?.displayedScore).toBe(0.55);
   });
 
   it('breaks a tie toward the heavier module', () => {

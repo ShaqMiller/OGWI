@@ -20,6 +20,7 @@ export interface BiggestOpportunity {
   moduleId: string;
   moduleName: string;
   blueprintWeight: number;
+  displayedScore: number;
   drag: number;
 }
 
@@ -46,6 +47,7 @@ export function pickBiggestOpportunity(
         moduleId: module.moduleId,
         moduleName: module.moduleName,
         blueprintWeight: module.blueprintWeight,
+        displayedScore: module.displayedScore,
         drag,
       };
     }

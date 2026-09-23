@@ -311,12 +311,17 @@ model ReviewEvent {
 // sits at-or-above the live computed score, easing toward it on decline
 // with a 7-day half-life rather than jumping down immediately. Live scores
 // are computed on demand from ItemMemoryState and are never stored.
+// Mutable working state: one row per learner and module, rewritten at each
+// publish point. `everMastered` is the exception - it only ever turns on, so a
+// module that decays back below the pass mark reads as "due for a refresh"
+// rather than as never having got there (Doc 2 B1).
 model PublishedMastery {
   id              String   @id @default(uuid())
   learnerId       String
   moduleId        String
   displayedScore  Float
   lastPublishedAt DateTime @default(now())
+  everMastered    Boolean  @default(false)
 
   module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
 

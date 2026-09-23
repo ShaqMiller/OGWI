@@ -19,7 +19,7 @@ interface SeededItem {
   correctOptionIndex: number;
 }
 
-type Mastery = { moduleId: string; liveScore: number; displayedScore: number }[];
+type Mastery = { moduleId: string; liveScore: number; displayedScore: number; state: string }[];
 
 let items: SeededItem[];
 
@@ -62,7 +62,7 @@ async function answerCorrectly(learnerId: string, toAnswer: SeededItem[]) {
 async function readMastery(learnerId: string): Promise<Mastery> {
   const res = await request(createApp()).get('/api/mastery/demo-cert').set('x-dev-learner-id', learnerId);
   expect(res.status).toBe(200);
-  return res.body;
+  return res.body.modules;
 }
 
 async function publish(learnerId: string): Promise<Mastery> {
@@ -70,7 +70,7 @@ async function publish(learnerId: string): Promise<Mastery> {
     .post('/api/publishing/demo-cert')
     .set('x-dev-learner-id', learnerId);
   expect(res.status).toBe(200);
-  return res.body.mastery;
+  return res.body.mastery.modules;
 }
 
 function advanceClock(learnerId: string, seconds: number) {

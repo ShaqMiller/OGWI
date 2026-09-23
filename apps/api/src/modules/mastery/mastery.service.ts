@@ -1,4 +1,9 @@
-import { MASTERY_ROLLOVER_IDLE_MINUTES, type ModuleMastery } from '@ogwi/shared';
+import {
+  MASTERY_ROLLOVER_IDLE_MINUTES,
+  type MasteryView,
+  type ModuleMastery,
+  type ModuleState,
+} from '@ogwi/shared';
 import * as clock from '../../lib/clock.js';
 import { liveRetrievability, type PersistedCardFields } from '../scheduler/fsrs.util.js';
 import { pickBiggestOpportunity, type BiggestOpportunity } from './biggest-opportunity.util.js';
@@ -105,6 +110,7 @@ export async function publishModuleMastery(
   learnerId: string,
   moduleId: string,
   liveScore: number,
+  passMark: number,
 ): Promise<number> {
   const now = clock.now();
   const published = await masteryRepository.findPublishedRecord(learnerId, moduleId);
@@ -126,7 +132,13 @@ export async function publishModuleMastery(
     displayedScore = published.displayedScore + decay * (liveScore - published.displayedScore);
   }
 
-  await masteryRepository.upsertPublishedScore(learnerId, moduleId, displayedScore, now);
+  await masteryRepository.upsertPublishedScore(
+    learnerId,
+    moduleId,
+    displayedScore,
+    now,
+    displayedScore >= passMark,
+  );
   return displayedScore;
 }
 
@@ -138,21 +150,53 @@ export async function publishModuleMastery(
 export async function publishQualificationMastery(
   learnerId: string,
   qualificationId: string,
-): Promise<ModuleMastery[]> {
-  return publishLiveScores(learnerId, await computeLiveModuleMastery(learnerId, qualificationId));
+): Promise<MasteryView> {
+  return publishLiveScores(
+    learnerId,
+    qualificationId,
+    await computeLiveModuleMastery(learnerId, qualificationId),
+  );
+}
+
+/**
+ * A module's state (Doc 2 B1). Pure: mastered at or above the pass mark, "due
+ * for a refresh" once it has been mastered and decayed back below, and simply
+ * building before it ever gets there.
+ */
+export function moduleState(params: {
+  displayedScore: number;
+  everMastered: boolean;
+  passMark: number;
+}): ModuleState {
+  if (params.displayedScore >= params.passMark) return 'mastered';
+  return params.everMastered ? 'due_for_refresh' : 'building';
 }
 
 async function publishLiveScores(
   learnerId: string,
+  qualificationId: string,
   liveScores: { moduleId: string; moduleName: string; liveScore: number }[],
-): Promise<ModuleMastery[]> {
-  const results: ModuleMastery[] = [];
+): Promise<MasteryView> {
+  const passMark = await masteryRepository.findPassMark(qualificationId);
+
+  const modules: ModuleMastery[] = [];
   for (const module of liveScores) {
-    const displayedScore = await publishModuleMastery(learnerId, module.moduleId, module.liveScore);
-    results.push({ ...module, displayedScore });
+    const displayedScore = await publishModuleMastery(
+      learnerId,
+      module.moduleId,
+      module.liveScore,
+      passMark,
+    );
+    modules.push({
+      ...module,
+      displayedScore,
+      // Freshly published, so "ever mastered" is either already true or just
+      // became true; either way the state follows from the score.
+      state: displayedScore >= passMark ? 'mastered' : 'due_for_refresh',
+    });
   }
 
-  return results;
+  return toView(learnerId, qualificationId, modules, passMark);
 }
 
 /**
@@ -167,25 +211,59 @@ async function publishLiveScores(
 export async function getQualificationMastery(
   learnerId: string,
   qualificationId: string,
-): Promise<ModuleMastery[]> {
+): Promise<MasteryView> {
   const liveScores = await computeLiveModuleMastery(learnerId, qualificationId);
-  const [published, lastReviewedAt] = await Promise.all([
+  const [published, lastReviewedAt, passMark] = await Promise.all([
     masteryRepository.findPublishedRecords(learnerId, liveScores.map((module) => module.moduleId)),
     masteryRepository.findLastReviewedAt(learnerId, qualificationId),
+    masteryRepository.findPassMark(qualificationId),
   ]);
 
   const publishTimes = [...published.values()].map((record) => record.lastPublishedAt.getTime());
   const lastPublishedAt = publishTimes.length > 0 ? new Date(Math.max(...publishTimes)) : null;
 
   if (isDailyRolloverDue({ lastPublishedAt, lastReviewedAt, now: clock.now() })) {
-    return publishLiveScores(learnerId, liveScores);
+    return publishLiveScores(learnerId, qualificationId, liveScores);
   }
 
-  return liveScores.map((module) => ({
-    ...module,
+  const modules: ModuleMastery[] = liveScores.map((module) => {
+    const record = published.get(module.moduleId);
     // Never published: nothing has reached a publish point to show yet.
-    displayedScore: published.get(module.moduleId)?.displayedScore ?? 0,
-  }));
+    const displayedScore = record?.displayedScore ?? 0;
+
+    return {
+      ...module,
+      displayedScore,
+      state: moduleState({ displayedScore, everMastered: record?.everMastered ?? false, passMark }),
+    };
+  });
+
+  return toView(learnerId, qualificationId, modules, passMark);
+}
+
+/**
+ * Wraps the modules with the Biggest Opportunity, which reads the same
+ * displayed scores - so it is stable between publish points too (Doc 2 B1:
+ * "recomputed at session/run end, stable between").
+ */
+async function toView(
+  learnerId: string,
+  qualificationId: string,
+  modules: ModuleMastery[],
+  passMark: number,
+): Promise<MasteryView> {
+  const opportunity = await findBiggestOpportunity(learnerId, qualificationId, passMark);
+
+  return {
+    modules,
+    passMarkPercent: Math.round(passMark * 100),
+    biggestOpportunity: opportunity && {
+      moduleId: opportunity.moduleId,
+      moduleName: opportunity.moduleName,
+      examSharePercent: Math.round(opportunity.blueprintWeight * 100),
+      pointsBelowPassMark: Math.round((passMark - opportunity.displayedScore) * 100),
+    },
+  };
 }
 
 /**

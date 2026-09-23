@@ -101,6 +101,11 @@ export function ReadinessCard({ slug }: { slug: string }) {
                 value={published.forecast.frozen ? 'frozen' : 'live'}
                 note={published.forecast.frozen ? '14+ quiet days - held at its last value' : undefined}
               />
+              <Row
+                label="Spacing horizon"
+                value={`${published.horizonDays} days`}
+                note="how far ahead the scheduler may place a review - not a deadline, never shown to a learner"
+              />
               <Row label="First-score reveal" value={published.firstScore ? 'yes, this publication' : 'no'} />
               <Row label="Celebration" value={published.celebrate ? 'fired on this publication' : 'no'} note="once ever, on a rising crossing of 80% with fair+ certainty" />
             </tbody>

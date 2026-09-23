@@ -1,3 +1,4 @@
+import { READINESS_HORIZON_DEFAULT_DAYS } from '@ogwi/shared';
 import { litreEventDataForReview } from '../economy/economy.repository.js';
 import { prisma } from '../../lib/prisma.js';
 import type { PersistedCardFields } from './fsrs.util.js';
@@ -251,4 +252,20 @@ export async function findDueItems(
       : [];
 
   return { dueStates, newItemIds: newItems.map((item) => item.id) };
+}
+
+/**
+ * The learner's spacing horizon (Doc 2 B2), from their last readiness
+ * publication. Read here rather than through the readiness module because
+ * readiness reaches composition, which reaches this module - the same
+ * leaf-read precedent readiness uses for exam runs.
+ */
+export async function findHorizonDays(learnerId: string, qualificationId: string): Promise<number> {
+  const row = await prisma.readinessPublication.findFirst({
+    where: { learnerId, qualificationId },
+    orderBy: { publishedAt: 'desc' },
+    select: { horizonDays: true },
+  });
+
+  return row?.horizonDays ?? READINESS_HORIZON_DEFAULT_DAYS;
 }

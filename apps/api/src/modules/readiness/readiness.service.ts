@@ -35,6 +35,7 @@ import {
   withCorrectAnswers,
 } from './next-action.util.js';
 import { normalCdf } from './normal-cdf.util.js';
+import { resolveHorizonDays } from './horizon.util.js';
 import { decideCelebration, isForecastFrozen } from './publication-rules.util.js';
 import * as readinessRepository from './readiness.repository.js';
 import type {
@@ -457,12 +458,17 @@ export async function publishReadiness(
       ? { ...previous.forecast, frozen: true }
       : null;
 
+  const forecast = frozenForecast ?? result.forecast;
+
   const published: PublishedReadiness = {
     ...result,
     oddsPercent: unlocked ? result.oddsPercent : null,
     celebrationEligible: unlocked && result.celebrationEligible,
-    forecast: frozenForecast ?? result.forecast,
+    forecast,
     unlocked,
+    // The scheduler reads this until the next publication (Doc 2 B2), so it
+    // follows the forecast that was actually published, frozen or not.
+    horizonDays: resolveHorizonDays({ expectedFinishDate: forecast.expectedFinishDate, now }),
     // Doc 2 B2's reveal: "Here's your first readiness score - it sharpens with
     // everything you do." True on exactly one publication.
     firstScore: unlocked && !everUnlocked,

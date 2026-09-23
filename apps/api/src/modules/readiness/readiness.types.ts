@@ -22,6 +22,7 @@ export interface ReadinessResult {
 
 export interface PublishedReadiness extends ReadinessResult {
   unlocked: boolean;
+  horizonDays: number;
   firstScore: boolean;
   celebrate: boolean;
   publishedAt: Date;

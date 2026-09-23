@@ -166,6 +166,7 @@ export async function createPublication(
       forecastItemsRemaining: forecast.itemsRemaining,
       forecastPaceItemsPerDay: forecast.paceItemsPerDay,
       forecastFrozen: forecast.frozen,
+      horizonDays: published.horizonDays,
       nextAction: {
         chosen: published.nextAction,
         candidates: breakdown.nextActionCandidates,
@@ -203,6 +204,7 @@ export async function findLatestPublication(
 
   return {
     unlocked: row.unlocked,
+    horizonDays: row.horizonDays,
     firstScore: row.firstScore,
     celebrate: row.celebrated,
     publishedAt: row.publishedAt,

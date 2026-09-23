@@ -101,4 +101,13 @@ export const READINESS_UNLOCK_TOPICS_REQUIRED = 1;
 export const READINESS_UNLOCK_MODULES_REQUIRED = 2;
 export const READINESS_UNLOCK_EXAM_RUNS_REQUIRED = 1;
 
+/**
+ * The spacing horizon (Doc 2 B2): clamp(forecast - today, floor, cap), with
+ * the default used before any pace data exists. It caps how far ahead the
+ * scheduler may place a review - never a deadline, never shown to a learner.
+ */
+export const READINESS_HORIZON_FLOOR_DAYS = 45;
+export const READINESS_HORIZON_CAP_DAYS = 365;
+export const READINESS_HORIZON_DEFAULT_DAYS = 90;
+
 export const READINESS_CONFIG_VERSION = 'readiness-calibrated-3';

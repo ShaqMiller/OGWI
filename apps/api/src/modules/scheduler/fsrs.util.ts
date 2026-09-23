@@ -11,11 +11,14 @@ import {
 } from 'ts-fsrs';
 
 /**
- * The one FSRS instance for the whole module, built from SCHEDULER_CONFIG
- * (Doc 2 B4: "launch on FSRS's published default parameters"). Every option
- * that affects scheduling is passed explicitly rather than inherited, so the
- * running scheduler is exactly the configuration its version ID names.
- * Per-learner parameter optimisation is deferred in the handover, not built.
+ * The default FSRS instance, built from SCHEDULER_CONFIG (Doc 2 B4: "launch on
+ * FSRS's published default parameters"). Every option that affects scheduling
+ * is passed explicitly rather than inherited, so the running scheduler is
+ * exactly the configuration its version ID names. Per-learner parameter
+ * optimisation is deferred in the handover, not built.
+ *
+ * Used for reads (retrievability doesn't depend on the interval cap) and when
+ * no horizon is known. Grading uses schedulerWithHorizon below.
  */
 export const fsrsScheduler = fsrs(
   generatorParameters({
@@ -24,6 +27,39 @@ export const fsrsScheduler = fsrs(
     enable_short_term: SCHEDULER_CONFIG.enableShortTerm,
   }),
 );
+
+const schedulersByHorizon = new Map<number, ReturnType<typeof fsrs>>();
+
+/**
+ * The same scheduler, capped at the learner's spacing horizon (Doc 2 B2) - no
+ * review is placed further ahead than that. Instances are cached per horizon:
+ * one per distinct value, not one per answer.
+ *
+ * Only new assignments use it. Existing due dates are never rewritten, so a
+ * moved forecast can't mass-reschedule anything.
+ *
+ * ts-fsrs applies maximum_interval to the interval it computes, and a review
+ * taken exactly on its due date can then land one day past it (45 becomes 46).
+ * The horizon is a scheduling bound, not a promise shown to anyone, so a day's
+ * rounding is left alone rather than fought.
+ */
+export function schedulerWithHorizon(horizonDays: number): ReturnType<typeof fsrs> {
+  const maximumInterval = Math.max(1, Math.round(horizonDays));
+  const cached = schedulersByHorizon.get(maximumInterval);
+  if (cached) return cached;
+
+  const scheduler = fsrs(
+    generatorParameters({
+      request_retention: SCHEDULER_CONFIG.requestRetention,
+      enable_fuzz: SCHEDULER_CONFIG.enableFuzz,
+      enable_short_term: SCHEDULER_CONFIG.enableShortTerm,
+      maximum_interval: maximumInterval,
+    }),
+  );
+  schedulersByHorizon.set(maximumInterval, scheduler);
+
+  return scheduler;
+}
 
 const DB_TO_FSRS_STATE = {
   NEW: State.New,

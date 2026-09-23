@@ -108,6 +108,11 @@ export const publishedReadinessSchema = readinessResultSchema.extend({
   firstScore: z.boolean(),
   /** This publication crossed 80% and fired the one-time celebration. */
   celebrate: z.boolean(),
+  /**
+   * The spacing horizon in days: how far ahead the scheduler may place a
+   * review until the next publication. Scheduling only - never a deadline.
+   */
+  horizonDays: z.number().int().positive(),
   publishedAt: z.coerce.date(),
 });
 export type PublishedReadiness = z.infer<typeof publishedReadinessSchema>;

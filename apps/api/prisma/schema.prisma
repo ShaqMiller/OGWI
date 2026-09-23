@@ -662,6 +662,9 @@ model ReadinessPublication {
   forecastPaceItemsPerDay Float
   // Held at its last value after 14+ quiet days.
   forecastFrozen          Boolean  @default(false)
+  // The spacing horizon the scheduler reads until the next publication
+  // (Doc 2 B2). Scheduling only - never surfaced, never a deadline.
+  horizonDays             Int      @default(90)
   // { chosen, candidates } - the next action and every simulated candidate.
   nextAction              Json?
 

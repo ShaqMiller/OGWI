@@ -14,7 +14,13 @@ import * as economyService from '../economy/economy.service.js';
 import * as flightService from '../flight/flight.service.js';
 import * as schedulerRepository from './scheduler.repository.js';
 import { actSource, pumpKey, reviewActKey } from './idempotency.util.js';
-import { fromCard, fsrsScheduler, gradeToRating, liveRetrievability, toCardInput } from './fsrs.util.js';
+import {
+  fromCard,
+  gradeToRating,
+  liveRetrievability,
+  schedulerWithHorizon,
+  toCardInput,
+} from './fsrs.util.js';
 import type { DueItem, GradedItemState } from './scheduler.types.js';
 
 /**
@@ -140,20 +146,26 @@ export async function gradeReviewDeferringPump(
   const predictedRetrievability = existing ? liveRetrievability(existing, now) : null;
   const wasDue = predictedRetrievability !== null && predictedRetrievability <= DESIRED_RETENTION;
 
-  const cardInput = toCardInput(existing, now);
-  const { card } = fsrsScheduler.next(cardInput, now, gradeToRating(grade));
-  const persisted = fromCard(card);
-
-  const points = economyService.priceReviewGrade({ hadPriorState: existing !== null, wasDue, grade });
-
-  // Resolved before the write so the litre row can carry its qualification -
-  // a balance is per qualification, and a payment that couldn't name one would
-  // be invisible in it.
+  // Resolved before scheduling: the litre row needs it (a balance is per
+  // qualification, and a payment that couldn't name one would be invisible in
+  // it), and so does the spacing horizon below.
   const qualificationId =
     await contentGraphService.getQualificationIdForKnowledgeItem(knowledgeItemId);
   if (!qualificationId) {
     throw new NotFoundError(`Knowledge item "${knowledgeItemId}" does not belong to a qualification`);
   }
+
+  // The spacing horizon (Doc 2 B2), read lazily at this interval assignment -
+  // no review is placed beyond where the learner expects to finish. It comes
+  // from the last readiness publication, or the default before one exists.
+  // Only this new interval uses it; existing due dates are never rewritten.
+  const horizonDays = await schedulerRepository.findHorizonDays(learnerId, qualificationId);
+
+  const cardInput = toCardInput(existing, now);
+  const { card } = schedulerWithHorizon(horizonDays).next(cardInput, now, gradeToRating(grade));
+  const persisted = fromCard(card);
+
+  const points = economyService.priceReviewGrade({ hadPriorState: existing !== null, wasDue, grade });
 
   // Everything above is pure or a read; every write happens in here, in one
   // transaction, so a duplicate that loses the claim leaves nothing behind.

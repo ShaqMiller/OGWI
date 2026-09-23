@@ -280,6 +280,98 @@ nothing here blocks a merge.
       invariant suite and banned-vocabulary linter here; per the user's direction this pass
       keeps that reference-only. Revisit if/when enforcement actually becomes useful.
 
+- [x] **14. Credibility fixes (Phase 1)** - three corrections found by walking the client's
+      check-in script against the running app.
+
+      **Wrong answers were raising mastery.** FSRS resets retrievability to 1.0 on *any* review,
+      so an item answered wrong the first time read as fully known (R 1.000 immediately, 0.766 a
+      day later). `scoringRetrievability` in mastery.service is now the single rule - an item
+      scores only after its first correct retrieval (Doc 2 B1) - and readiness's projection uses
+      the same function, so the two can never disagree about which items count. "Ever answered
+      correctly" is derived from the append-only review log, so history counts automatically and
+      a known item can never drop back out of scoring. Coverage deliberately still counts
+      ATTEMPTED items: the learner has met the material. The `downside-ledger` suite pins the
+      things that must never lower mastery, with a CONTROL case proving the permitted decline
+      still works.
+
+      **The FSRS release is pinned.** `ts-fsrs` was a caret range and `SCHEDULER_CONFIG_VERSION`
+      named no release; `SCHEDULER_CONFIG` now resolves the version id to library, build,
+      algorithm, retention, fuzz and short-term settings, `fsrs.util` builds the scheduler FROM
+      that object, and `scheduler-config.test` fails if the installed build drifts from it.
+
+      **The forecast reads as coverage, not readiness** - moved beside the mastery bars and
+      reworded, because under the odds it read as the "ready by" date the decision log rejects.
+
+- [x] **15. The test clock, publish points, and two records (Phase 2)**
+
+      **Everything reads one clock** (`lib/clock.ts`, AsyncLocalStorage). Demo learners (ids
+      starting `demo-`) can move theirs forward from `/dev`, which is what makes day-scale rules
+      - remediation's two-different-days exit, due dates, mastery easing - demonstrable in a
+      meeting. Forward-only; reset deletes the demo learner rather than rewinding. `/api/dev` is
+      mounted only when `TEST_CLOCK_ENABLED`, the service re-checks it, and env.ts refuses the
+      flag under `NODE_ENV=production`. `clock-guard.test` fails on any `new Date()` or
+      `Date.now()` elsewhere in src. `ReviewEvent.reviewedAt` and `ExamRun.startedAt` are now
+      written explicitly - Postgres defaults can't be moved by any application clock, and the
+      remediation day rule reads `reviewedAt`.
+
+      **Displayed mastery moves only at publish points** (Doc 2 C4), not on read: End session,
+      topic completion, practice-batch end, exam submit, or a daily rollover materialised lazily
+      on the first read of a new UTC day, never within 30 minutes of an answer. The dashboard
+      used to refetch mastery after every answer, which republished mid-activity.
+
+      **Prediction-vs-outcome log** (Doc 2 B4): `ReviewEvent.predictedRetrievability` stores
+      FSRS's chance of recall at the moment of answering, null for a never-seen item (0 would
+      read as a confident prediction of failure). `GET /api/scheduler/review-log` serves it.
+      Cohort RMSE is not built - the spec never defines its bins.
+
+      **The remediation record is visible**: `GET /api/adaptive/remediation-records` returns the
+      source of each miss, the qualifying correct answers with their days and renderings, how
+      many are still needed, and when the next one can count. `rung` is always null until the
+      format ladder exists.
+
+- [x] **16. Readiness: calibrated, published, gated (Phase 3)**
+
+      **Calibration** (Doc 2 B2): `ExamRun.projectedScore` stores the projection a run is judged
+      against, taken *before* that run's answers are graded - afterwards it would already reflect
+      the paper. The odds multiply the projection by the recency-weighted mean of achieved over
+      projected, clamped to [0.7, 1.1]; weights halve every 30 days (a default). Runs projected
+      below 0.05 don't calibrate (dividing by ~0 is meaningless) but still count as evidence, and
+      runs submitted before the column existed never calibrate.
+
+      **The odds are published, not recomputed on read.** `ReadinessPublication` is append-only,
+      so the rows are also the odds history the spec lists under analytics. `POST
+      /api/publishing/:slug` is the one session-end publish point: it publishes mastery and the
+      odds together, and exam submit calls the same service. `GET /api/readiness/:slug` returns
+      `{ checklist, published }` and writes nothing but the daily rollover.
+
+      **No score until the unlock checklist is done** - a topic completed, questions answered
+      across two modules, one mini-mock - so every score ever shown was calibrated against an
+      exam-condition run. "Two modules" is capped at the qualification's module count, because
+      both demo qualifications have one and the literal rule would be unreachable.
+
+      **The mini-mock exists**: `ExamRunKind.MINI_MOCK`, 15 questions at 40s each (inside the
+      spec's "10-20 questions, ~10 minutes"), counting as exam evidence and paying the +20L
+      premium that was priced in step 12.
+
+      **sigma uses the spec's four ingredients** - coverage, exam evidence, run-ratio spread and
+      paper sampling noise - combined as independent sources with the 0.05 floor. The spec names
+      them but gives no formula, so the combination is a default. On the 8-question demo course
+      the paper-noise term dominates, which is honest: a short paper is noisy.
+
+      **Next action, celebration, reveal, freeze.** The next action simulates the spec's three
+      candidates with the scheduler's own FSRS step and publishes the winner as one plain line; a
+      certainty-band step is valued at 10 points of odds (a default). Biggest Opportunity (Doc 2
+      B1: drag = blueprint weight x max(0, pass mark - displayed)) picks the module to simulate.
+      The celebration fires once on a rising crossing of 80% with fair+ certainty; the first
+      scored publication carries the reveal copy; the forecast freezes after 14 fully quiet days.
+
+      **`/dev`** walks the number through piece by piece - projection, ratio, each run, sigma's
+      four parts, P(pass), band - which is what the check-in script asks for.
+
+      **Not built**: the spacing horizon (B2's clamp feeding the scheduler's interval
+      assignment), the Biggest Opportunity on Progress with its leverage framing, B1's
+      mastered / "due for a refresh" module states, and cohort RMSE.
+
 ## Scaffold-only steps (this session)
 
 - [x] pnpm monorepo: `apps/web` (Next.js App Router), `apps/api` (Express), `packages/shared`.

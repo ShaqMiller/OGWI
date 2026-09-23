@@ -107,9 +107,20 @@ is still missing; `docs/ARCHITECTURE.md` covers the data model. Short version: t
 exist in simplified form. That covers an FSRS scheduler (`ts-fsrs`, exact-pinned and named in
 `SCHEDULER_CONFIG`), mastery with live and published layers (an item only scores after its first
 correct answer), the adaptive remediation engine, session composition, the economy (including
-exam completion premiums), flight physics with altitude awards, and readiness odds whose
-confident certainty bands need exam-run evidence. Exam Simulation's core run is built, answers
-are checked server-side, and grading is retry-safe through a client-supplied `attemptId`. A
-plain placeholder UI is wired to real data. Still placeholders: Blurt/Teach Oggi marking is
+exam completion premiums), flight physics with altitude awards, and readiness. Exam Simulation
+and the mini-mock are built, answers are checked server-side, and grading is retry-safe through a
+client-supplied `attemptId`.
+
+Three things are worth knowing before touching this code:
+
+- **Time comes from `lib/clock.ts`, never `new Date()`** (a test enforces it). Demo learners can
+  move their clock forward from `/dev`, which is how day-scale rules get demonstrated.
+- **Displayed values only change at publish points** (Doc 2 C4) - session end, practice-run end,
+  exam submit, or a lazy daily rollover - and `POST /api/publishing/:slug` is that moment for
+  both mastery and the odds. Reads don't recompute them.
+- **The odds of passing are calibrated against exam runs and gated behind an unlock checklist**,
+  so no score appears until one exam-condition run backs it.
+
+A plain placeholder UI is wired to real data. Still placeholders: Blurt/Teach Oggi marking is
 keyword overlap rather than AI, the Oggi chat is canned client-side replies with no backend, and
 content is demo seed data only.

@@ -12,6 +12,7 @@ export * from './schemas/recall.schema.js';
 export * from './schemas/exam.schema.js';
 export * from './schemas/dev.schema.js';
 export * from './schemas/publishing.schema.js';
+export * from './schemas/progress.schema.js';
 export * from './constants/content-graph.constants.js';
 export * from './constants/scheduler.constants.js';
 export * from './constants/adaptive.constants.js';

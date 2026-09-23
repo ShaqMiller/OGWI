@@ -88,6 +88,15 @@ export function resolveActivitySlot(topic: TopicWithObjectives): ActivitySlot {
   return null;
 }
 
+/** Each topic's items, for surfaces that need the topic shape without the session logic. */
+export async function listTopicItemIds(
+  qualificationId: string,
+): Promise<{ topicId: string; knowledgeItemIds: string[] }[]> {
+  const topics = await compositionRepository.findTopicsForQualification(qualificationId);
+
+  return topics.map((topic) => ({ topicId: topic.topicId, knowledgeItemIds: allItemIds(topic) }));
+}
+
 /**
  * How many topics the learner has attempted every item of - the same
  * completeness rule composition uses to move on. For readiness's first-score

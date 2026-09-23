@@ -58,6 +58,11 @@ export const queryKeys = {
     run: (runId: string) => [...queryKeys.exam.all(), 'run', runId] as const,
     results: (runId: string) => [...queryKeys.exam.all(), 'results', runId] as const,
   },
+  progress: {
+    all: () => ['progress'] as const,
+    weekly: (slug: string, weeksAgo: number) =>
+      [...queryKeys.progress.all(), 'weekly', slug, weeksAgo] as const,
+  },
   dev: {
     all: () => ['dev'] as const,
     clock: () => [...queryKeys.dev.all(), 'clock'] as const,

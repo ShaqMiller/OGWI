@@ -1,4 +1,4 @@
-import type { SessionPublishResult } from '@ogwi/shared';
+import type { PublishTrigger, SessionPublishResult } from '@ogwi/shared';
 import * as masteryService from '../mastery/mastery.service.js';
 import * as readinessService from '../readiness/readiness.service.js';
 
@@ -17,9 +17,10 @@ import * as readinessService from '../readiness/readiness.service.js';
 export async function publishSession(
   learnerId: string,
   qualificationId: string,
+  trigger: PublishTrigger = 'session',
 ): Promise<SessionPublishResult> {
   const mastery = await masteryService.publishQualificationMastery(learnerId, qualificationId);
-  const readiness = await readinessService.publishReadiness(learnerId, qualificationId);
+  const readiness = await readinessService.publishReadiness(learnerId, qualificationId, trigger);
 
   return { mastery, readiness };
 }

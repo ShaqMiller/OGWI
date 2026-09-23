@@ -8,6 +8,7 @@ import { useFlightState } from '@/hooks/flight/useFlightState';
 import { useReadiness } from '@/hooks/readiness/useReadiness';
 import { ModuleMasteryBar } from '@/components/mastery/ModuleMasteryBar';
 import { ReadinessUnlockChecklist } from './ReadinessUnlockChecklist';
+import { WeeklyActivityCard } from './WeeklyActivityCard';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
@@ -118,6 +119,8 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
       {readiness.data && !published?.unlocked && (
         <ReadinessUnlockChecklist checklist={readiness.data.checklist} scorePublished={false} />
       )}
+
+      <WeeklyActivityCard qualificationSlug={qualification.slug} />
 
       {published?.unlocked && (
         <div style={{ marginTop: 'var(--space-3)', fontSize: '0.9rem' }}>

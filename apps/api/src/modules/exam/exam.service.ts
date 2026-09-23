@@ -216,7 +216,7 @@ export async function submitRun(runId: string, learnerId: string): Promise<ExamR
   // publish together. After the engine writes, so it publishes what the paper
   // did. A resumed submit republishes harmlessly: mastery easing over zero
   // elapsed time changes nothing, and the odds get one more history row.
-  await publishingService.publishSession(learnerId, run.qualificationId);
+  await publishingService.publishSession(learnerId, run.qualificationId, 'exam');
 
   return getResults(runId, learnerId);
 }

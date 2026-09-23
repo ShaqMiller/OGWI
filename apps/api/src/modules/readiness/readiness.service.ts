@@ -10,6 +10,7 @@ import {
   READINESS_SOLID_RUN_COUNT,
   READINESS_SOLID_RUN_WINDOW_DAYS,
   type NextAction,
+  type PublishTrigger,
   type SigmaComponents,
   type UnlockChecklist,
 } from '@ogwi/shared';
@@ -440,6 +441,7 @@ export async function evaluateUnlockChecklist(
 export async function publishReadiness(
   learnerId: string,
   qualificationId: string,
+  trigger: PublishTrigger,
 ): Promise<PublishedReadiness> {
   const passMark = await readinessRepository.findPassMark(qualificationId);
   const [result, checklist, previous, alreadyCelebrated, everUnlocked, lastReviewedAt] = await Promise.all([
@@ -482,7 +484,7 @@ export async function publishReadiness(
     publishedAt: now,
   };
 
-  await readinessRepository.createPublication(learnerId, qualificationId, published);
+  await readinessRepository.createPublication(learnerId, qualificationId, published, trigger);
   return published;
 }
 
@@ -506,7 +508,7 @@ export async function getReadiness(learnerId: string, qualificationId: string): 
   });
 
   if (rolloverDue) {
-    return { checklist, published: await publishReadiness(learnerId, qualificationId) };
+    return { checklist, published: await publishReadiness(learnerId, qualificationId, 'rollover') };
   }
 
   return { checklist, published: latest };

@@ -18,6 +18,7 @@ import { examRouter } from './modules/exam/exam.routes.js';
 import { flightRouter } from './modules/flight/flight.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { masteryRouter } from './modules/mastery/mastery.routes.js';
+import { progressRouter } from './modules/progress/progress.routes.js';
 import { publishingRouter } from './modules/publishing/publishing.routes.js';
 import { readinessRouter } from './modules/readiness/readiness.routes.js';
 import { recallRouter } from './modules/recall/recall.routes.js';
@@ -45,6 +46,7 @@ export function createApp(
   app.use('/api/recall', recallRouter);
   app.use('/api/exam', examRouter);
   app.use('/api/publishing', publishingRouter);
+  app.use('/api/progress', progressRouter);
 
   // Dev and staging only. Not mounted otherwise, so the routes don't exist -
   // and env.ts refuses TEST_CLOCK_ENABLED in production.

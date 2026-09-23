@@ -3,6 +3,7 @@ import {
   READINESS_MIN_RUN_QUESTION_COUNT,
   type CalibrationRun,
   type NextAction,
+  type PublishTrigger,
   type SigmaComponents,
 } from '@ogwi/shared';
 import { Prisma } from '@prisma/client';
@@ -144,6 +145,7 @@ export async function createPublication(
   learnerId: string,
   qualificationId: string,
   published: PublishedReadiness,
+  trigger: PublishTrigger,
 ): Promise<void> {
   const { breakdown, forecast } = published;
 
@@ -183,6 +185,7 @@ export async function createPublication(
         ...run,
         submittedAt: run.submittedAt.toISOString(),
       })) as Prisma.InputJsonValue,
+      trigger,
       readinessConfigVersion: READINESS_CONFIG_VERSION,
     },
   });

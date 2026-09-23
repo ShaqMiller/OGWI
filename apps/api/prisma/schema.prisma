@@ -687,6 +687,11 @@ model ReadinessPublication {
   // weight. Numbers and timestamps only - nothing a learner typed.
   calibrationRuns  Json
 
+  // What caused this publish: session, exam, or the daily rollover. The
+  // first two are the learner's own doing, so Progress counts them as
+  // sessions; the rollover happens on its own.
+  trigger                String   @default("session")
+
   readinessConfigVersion String
 
   @@index([learnerId, qualificationId, publishedAt])

@@ -15,7 +15,7 @@ export default function PracticePage() {
   const { data, isLoading, error } = useQualifications();
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 760 }}>
       <h1>Practice</h1>
 
       {isLoading && <p>Loading...</p>}

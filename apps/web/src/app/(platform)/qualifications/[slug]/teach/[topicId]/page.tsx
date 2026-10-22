@@ -74,7 +74,7 @@ export default function TeachOggiPage({ params }: { params: { slug: string; topi
   }
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 760 }}>
       <Link href={`/qualifications/${slug}`} style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
         ← Back
       </Link>
@@ -96,7 +96,7 @@ export default function TeachOggiPage({ params }: { params: { slug: string; topi
                 alignSelf: message.from === 'oggi' ? 'flex-start' : 'flex-end',
                 maxWidth: '80%',
                 background: message.from === 'oggi' ? 'var(--color-border)' : 'var(--color-primary)',
-                color: message.from === 'oggi' ? 'var(--color-text)' : '#0a0a0a',
+                color: message.from === 'oggi' ? 'var(--color-text)' : 'var(--color-on-cta)',
                 padding: '0.5rem 0.85rem',
                 borderRadius: 'var(--radius)',
               }}

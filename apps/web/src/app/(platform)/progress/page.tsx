@@ -12,7 +12,7 @@ export default function ProgressPage() {
   const { data, isLoading, error } = useQualifications();
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 760 }}>
       <h1>Progress</h1>
       <p style={{ color: 'var(--color-text-muted)' }}>
         Points and altitude move as you go. Mastery and your odds of passing update when you

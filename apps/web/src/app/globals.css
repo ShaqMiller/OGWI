@@ -1,23 +1,33 @@
 :root {
   color-scheme: dark;
 
-  /* A small, cohesive dark palette - formalises colours already used ad hoc
-     (e.g. the #4a90d9 progress-bar blue) rather than changing them. This is
-     a light-touch pass, not a design system - real designs are coming
-     later. */
-  --color-bg: #0f1115;
-  --color-bg-elevated: #171a21;
-  --color-border: #2a2f3a;
-  --color-text: #e8eaed;
-  --color-text-muted: #9aa1ac;
-  --color-primary: #4a90d9;
-  --color-primary-hover: #5da0e8;
-  --color-success: #4caf82;
-  --color-success-bg: #1c3329;
-  --color-danger: #d9756a;
-  --color-danger-bg: #3a2320;
+  /* "Bold and focused": deep indigo surfaces, lavender text and bars, and a
+     coral balloon as the one warm accent. Still a light-touch pass ahead of
+     the real designs, but every page reads from these tokens. */
+  --color-bg: #1b1745;
+  --color-bg-elevated: #26215c;
+  --color-bg-sunken: #3c3489;
+  --color-border: #3c3489;
+  --color-text: #eeedfe;
+  --color-text-muted: #afa9ec;
+  --color-primary: #9f98ec;
+  --color-primary-hover: #b8b2f2;
+  --color-cta: #eeedfe;
+  --color-on-cta: #26215c;
+  --color-success: #5dcaa5;
+  --color-success-bg: #14423f;
+  --color-danger: #f09595;
+  --color-danger-bg: #4b1e33;
 
-  --radius: 8px;
+  /* The balloon - the flight visual every page carries. */
+  --color-balloon: #f0997b;
+  --color-balloon-light: #f5c4b3;
+  --color-basket: #d85a30;
+  --color-sky: #3c3489;
+  --color-sky-line: #534ab7;
+  --color-ground: #534ab7;
+
+  --radius: 10px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -47,6 +57,11 @@ h2,
 h3 {
   font-weight: 600;
   line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+h1 {
+  font-size: 1.9rem;
 }
 
 a {

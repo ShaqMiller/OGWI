@@ -32,7 +32,7 @@ export default function BlurtPage({ params }: { params: { slug: string; topicId:
   }
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 760 }}>
       <Link href={`/qualifications/${slug}`} style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
         ← Back
       </Link>

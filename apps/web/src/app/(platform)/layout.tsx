@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { NavFlightPill } from '@/components/flight/NavFlightPill';
 
 /**
  * The Platform: home, Practice, Progress, Awards, Oggi. Normal navigation
@@ -24,9 +25,10 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
           gap: 'var(--space-2)',
           padding: 'var(--space-3) var(--space-5)',
           borderBottom: '1px solid var(--color-border)',
+          background: 'var(--color-bg-elevated)',
         }}
       >
-        <span style={{ fontWeight: 700, marginRight: 'var(--space-4)' }}>Ogwi</span>
+        <span style={{ fontWeight: 700, fontSize: '1.1rem', marginRight: 'var(--space-4)' }}>Ogwi</span>
         <Link href="/" style={linkStyle}>
           Home
         </Link>
@@ -42,13 +44,15 @@ export default function PlatformLayout({ children }: { children: React.ReactNode
         <Link href="/oggi" style={linkStyle}>
           Oggi
         </Link>
+        <span style={{ flex: 1 }} />
+        <NavFlightPill />
         {process.env.TEST_CLOCK_ENABLED === 'true' && (
-          <Link href="/dev" style={{ ...linkStyle, marginLeft: 'auto', color: 'var(--color-text-muted)' }}>
+          <Link href="/dev" style={{ ...linkStyle, color: 'var(--color-text-muted)' }}>
             Dev
           </Link>
         )}
       </nav>
-      <main style={{ padding: 'var(--space-5)' }}>{children}</main>
+      <main style={{ padding: 'var(--space-5)', maxWidth: 760, margin: '0 auto' }}>{children}</main>
     </div>
   );
 }

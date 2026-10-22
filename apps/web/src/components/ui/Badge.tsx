@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 type BadgeTone = 'neutral' | 'success' | 'warning';
 
 const TONE_STYLES: Record<BadgeTone, { background: string; color: string }> = {
-  neutral: { background: 'var(--color-border)', color: 'var(--color-text-muted)' },
+  neutral: { background: 'var(--color-sky-line)', color: 'var(--color-text)' },
   success: { background: 'var(--color-success-bg)', color: 'var(--color-success)' },
   warning: { background: 'var(--color-danger-bg)', color: 'var(--color-danger)' },
 };

@@ -17,7 +17,7 @@ export default function FlowLayout({ children }: { children: React.ReactNode }) 
           display: 'flex',
           justifyContent: 'space-between',
           padding: '0.75rem 1rem',
-          borderBottom: '1px solid #ddd',
+          borderBottom: '1px solid var(--color-border)',
         }}
       >
         <span>✕</span>

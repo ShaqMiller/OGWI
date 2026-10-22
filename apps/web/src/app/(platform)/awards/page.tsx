@@ -1,6 +1,9 @@
 'use client';
 
 import { useAwards } from '@/hooks/flight/useAwards';
+import { useFlightStates } from '@/hooks/flight/useFlightStates';
+import { useQualifications } from '@/hooks/content-graph/useQualifications';
+import { FlightSky } from '@/components/flight/FlightSky';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
@@ -12,10 +15,26 @@ import { Badge } from '@/components/ui/Badge';
  */
 export default function AwardsPage() {
   const { data, isLoading, error } = useAwards();
+  const qualifications = useQualifications();
+  const flights = useFlightStates(qualifications.data?.map((q) => q.slug) ?? []);
+  // Awards are learner-global, so the sky shows the highest flight across courses.
+  const highest = flights
+    .map((query) => query.data)
+    .filter((flight) => flight !== undefined)
+    .sort((a, b) => Number(b.isAirborne) - Number(a.isAirborne) || b.fill - a.fill)[0];
+  const bandsInSky = (data ?? []).map((a) => a.thresholdFt).filter((ft) => ft <= 500);
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 760 }}>
       <h1>Awards</h1>
+
+      <FlightSky
+        flight={highest}
+        width="100%"
+        height={260}
+        markers={bandsInSky}
+        earnedMarkers={(data ?? []).filter((a) => a.earnedAt).map((a) => a.thresholdFt)}
+      />
 
       {isLoading && <p>Loading...</p>}
       {error && <p>Could not reach the API.</p>}

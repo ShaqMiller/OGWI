@@ -8,10 +8,12 @@ import { useMastery } from '@/hooks/mastery/useMastery';
 import { usePublishSession } from '@/hooks/publishing/usePublishSession';
 import { useNextSession } from '@/hooks/composition/useNextSession';
 import { useEconomyBalance } from '@/hooks/economy/useEconomyBalance';
+import { useFlightState } from '@/hooks/flight/useFlightState';
 import { useSubmitAnswer } from '@/hooks/scheduler/useSubmitAnswer';
 import { useTopicKeyPoints } from '@/hooks/recall/useTopicKeyPoints';
 import { ModuleMasteryBar } from '@/components/mastery/ModuleMasteryBar';
 import { MultipleChoiceOptions } from '@/components/quiz/MultipleChoiceOptions';
+import { FlightSky, flightStatusLine } from '@/components/flight/FlightSky';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
@@ -34,6 +36,7 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
   const mastery = useMastery(slug);
   const nextSession = useNextSession(slug);
   const balance = useEconomyBalance(slug);
+  const flight = useFlightState(slug);
   const submitAnswer = useSubmitAnswer(slug);
   const currentTopicId = nextSession.data?.currentTopic?.topicId ?? null;
   const topicKeyPoints = useTopicKeyPoints(currentTopicId);
@@ -104,33 +107,39 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
       : null);
 
   return (
-    <div style={{ maxWidth: 640 }}>
-      <h1>{qualification.data?.name ?? slug}</h1>
+    <div style={{ maxWidth: 760 }}>
+      <Card style={{ marginBottom: 'var(--space-4)', display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5)' }}>
+        <FlightSky flight={flight.data} />
+        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+          <div style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+            {qualification.data?.name ?? slug}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', margin: 'var(--space-1) 0' }}>
+            <span style={{ fontSize: '2.4rem', fontWeight: 600, lineHeight: 1.1 }}>
+              {balance.data?.totalPoints ?? '—'}
+            </span>
+            <span style={{ color: 'var(--color-text-muted)' }}>points</span>
+          </div>
+          {flight.data && (
+            <div style={{ color: 'var(--color-balloon-light)', fontSize: '0.9rem', marginBottom: 'var(--space-4)' }}>
+              {flightStatusLine(flight.data)}
+            </div>
+          )}
 
-      <div
-        style={{
-          margin: 'var(--space-3) 0 var(--space-4)',
-          color: 'var(--color-text-muted)',
-        }}
-      >
-        <strong style={{ color: 'var(--color-text)' }}>{balance.data?.totalPoints ?? '—'}</strong>{' '}
-        points
-      </div>
-
-      <Card style={{ marginBottom: 'var(--space-4)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ margin: 0 }}>Mastery</h2>
-          <Button variant="secondary" disabled={publishMastery.isPending} onClick={() => publish()}>
-            End session
-          </Button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2 style={{ margin: 0, fontSize: '1.05rem' }}>Mastery</h2>
+            <Button variant="secondary" disabled={publishMastery.isPending} onClick={() => publish()}>
+              End session
+            </Button>
+          </div>
+          <p style={{ color: 'var(--color-text-muted)', fontSize: '0.8rem', margin: 'var(--space-1) 0 var(--space-3)' }}>
+            Updates when you end a session or finish a topic.
+          </p>
+          {mastery.isLoading && <p>Loading...</p>}
+          {mastery.data?.modules.map((m) => (
+            <ModuleMasteryBar key={m.moduleId} mastery={m} />
+          ))}
         </div>
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
-          Updates when you end a session or finish a topic.
-        </p>
-        {mastery.isLoading && <p>Loading...</p>}
-        {mastery.data?.modules.map((m) => (
-          <ModuleMasteryBar key={m.moduleId} mastery={m} />
-        ))}
       </Card>
 
       <Card>

@@ -7,6 +7,7 @@ import { useEconomyBalance } from '@/hooks/economy/useEconomyBalance';
 import { useFlightState } from '@/hooks/flight/useFlightState';
 import { useReadiness } from '@/hooks/readiness/useReadiness';
 import { ModuleMasteryBar } from '@/components/mastery/ModuleMasteryBar';
+import { FlightSky, flightStatusLine } from '@/components/flight/FlightSky';
 import { ReadinessUnlockChecklist } from './ReadinessUnlockChecklist';
 import { WeeklyActivityCard } from './WeeklyActivityCard';
 import { Card } from '@/components/ui/Card';
@@ -53,108 +54,114 @@ export function QualificationProgressCard({ qualification }: { qualification: Qu
 
   return (
     <Card style={{ margin: 'var(--space-4) 0' }}>
-      <h2 style={{ margin: 0 }}>
-        <Link href={`/qualifications/${qualification.slug}`} style={{ textDecoration: 'none' }}>
-          {qualification.name}
-        </Link>
-      </h2>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-5)' }}>
+        <FlightSky flight={flight.data} width={140} height={220} />
 
-      <div
-        style={{
-          display: 'flex',
-          gap: 'var(--space-4)',
-          margin: 'var(--space-2) 0 var(--space-3)',
-          color: 'var(--color-text-muted)',
-          fontSize: '0.9rem',
-        }}
-      >
-        <span>{balance.data?.totalPoints ?? '—'} points</span>
-        {flight.data && (
-          <span>
-            {flight.data.isAirborne
-              ? `${Math.round(flight.data.fill)}ft altitude`
-              : `Grounded (${Math.round(flight.data.fill)}L / 100 to liftoff)`}
-          </span>
-        )}
-      </div>
+        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+          <Link
+            href={`/qualifications/${qualification.slug}`}
+            style={{ textDecoration: 'none', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}
+          >
+            {qualification.name}
+          </Link>
 
-      {mastery.isLoading && <p>Loading mastery...</p>}
-      {mastery.data?.modules.length === 0 && <p>No modules yet.</p>}
-      {mastery.data?.modules.map((m) => <ModuleMasteryBar key={m.moduleId} mastery={m} />)}
-
-      {/* Doc 2 B1's Biggest Opportunity, with its leverage framing. */}
-      {mastery.data?.biggestOpportunity && (
-        <p style={{ fontSize: '0.9rem', margin: 'var(--space-2) 0 0' }}>
-          Biggest opportunity: <strong>{mastery.data.biggestOpportunity.moduleName}</strong>{' '}
-          <span style={{ color: 'var(--color-text-muted)' }}>
-            - it&apos;s {mastery.data.biggestOpportunity.examSharePercent}% of the exam, and{' '}
-            {mastery.data.biggestOpportunity.pointsBelowPassMark} points of it are still to come.
-          </span>
-        </p>
-      )}
-
-      {/*
-        A forecast of working through the material, NOT of being ready to pass.
-        It lives with the coverage bars rather than under the odds of passing,
-        because under the odds it read as a "ready by" date - which the
-        client's decision log rejects. Readiness itself has no date.
-      */}
-      {published?.forecast.expectedFinishDate && published.forecast.itemsRemaining > 0 && (
-        <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: 'var(--space-2) 0 0' }}>
-          {published.forecast.frozen ? (
-            <>
-              At your last pace you&apos;d have worked through the whole course by around{' '}
-              {formatShortDate(published.forecast.expectedFinishDate)} - picks back up when you do.
-            </>
-          ) : (
-            <>
-              At this pace you&apos;ll have worked through the whole course by around{' '}
-              {formatShortDate(published.forecast.expectedFinishDate)}.
-            </>
+          {/* No score exists until the unlock checklist is done (Doc 2 B2). */}
+          {readiness.data && !published?.unlocked && (
+            <ReadinessUnlockChecklist checklist={readiness.data.checklist} scorePublished={false} />
           )}
-        </p>
-      )}
 
-      {/* No score exists until the unlock checklist is done (Doc 2 B2). */}
-      {readiness.data && !published?.unlocked && (
-        <ReadinessUnlockChecklist checklist={readiness.data.checklist} scorePublished={false} />
-      )}
-
-      <WeeklyActivityCard qualificationSlug={qualification.slug} />
-
-      {published?.unlocked && (
-        <div style={{ marginTop: 'var(--space-3)', fontSize: '0.9rem' }}>
-          {published.celebrate && (
-            <p style={{ margin: '0 0 var(--space-2)', fontWeight: 600 }}>
-              You&apos;d very likely pass if you sat it soon.
-            </p>
-          )}
-          {published.firstScore && (
-            <p style={{ margin: '0 0 var(--space-2)', color: 'var(--color-text-muted)' }}>
-              Here&apos;s your first readiness score - it sharpens with everything you do.
-            </p>
-          )}
-          {published.withheld ? (
-            <>
-              Odds of passing: <Badge>under 20%</Badge> — on track at{' '}
-              {published.weightedCoveragePercent}% coverage; climbs as you go
-            </>
-          ) : (
-            <>
-              Odds of passing if you sat it soon: <strong>{published.oddsPercent}%</strong>{' '}
-              <Badge tone={CERTAINTY_TONE[published.certaintyBand]}>
-                {CERTAINTY_LABEL[published.certaintyBand]}
-              </Badge>
-            </>
-          )}
-          {/* Any gap renders only as the next action (Doc 2 B2). */}
-          {published.nextAction && (
-            <div style={{ color: 'var(--color-text-muted)', marginTop: 'var(--space-1)' }}>
-              {published.nextAction.line}
+          {published?.unlocked && (
+            <div style={{ margin: 'var(--space-1) 0 var(--space-3)', fontSize: '0.9rem' }}>
+              {published.celebrate && (
+                <p style={{ margin: '0 0 var(--space-2)', fontWeight: 600 }}>
+                  You&apos;d very likely pass if you sat it soon.
+                </p>
+              )}
+              {published.withheld ? (
+                <>
+                  Odds of passing: <Badge>under 20%</Badge> — on track at{' '}
+                  {published.weightedCoveragePercent}% coverage; climbs as you go
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize: '2.4rem', fontWeight: 600, lineHeight: 1.1 }}>
+                    {published.oddsPercent}%
+                  </div>
+                  <div style={{ color: 'var(--color-text-muted)' }}>
+                    chance of passing if you sat it soon{' '}
+                    <Badge tone={CERTAINTY_TONE[published.certaintyBand]}>
+                      {CERTAINTY_LABEL[published.certaintyBand]}
+                    </Badge>
+                  </div>
+                </>
+              )}
+              {published.firstScore && (
+                <p style={{ margin: 'var(--space-2) 0 0', color: 'var(--color-text-muted)' }}>
+                  Here&apos;s your first readiness score - it sharpens with everything you do.
+                </p>
+              )}
+              {/* Any gap renders only as the next action (Doc 2 B2). */}
+              {published.nextAction && (
+                <div style={{ color: 'var(--color-balloon-light)', marginTop: 'var(--space-2)' }}>
+                  {published.nextAction.line}
+                </div>
+              )}
             </div>
           )}
+
+          <div
+            style={{
+              display: 'flex',
+              gap: 'var(--space-4)',
+              margin: 'var(--space-3) 0',
+              color: 'var(--color-text-muted)',
+              fontSize: '0.9rem',
+            }}
+          >
+            <span>{balance.data?.totalPoints ?? '—'} points</span>
+            {flight.data && <span>{flightStatusLine(flight.data)}</span>}
+          </div>
+
+          {mastery.isLoading && <p>Loading mastery...</p>}
+          {mastery.data?.modules.length === 0 && <p>No modules yet.</p>}
+          {mastery.data?.modules.map((m) => <ModuleMasteryBar key={m.moduleId} mastery={m} />)}
+
+          {/* Doc 2 B1's Biggest Opportunity, with its leverage framing. */}
+          {mastery.data?.biggestOpportunity && (
+            <p style={{ fontSize: '0.9rem', margin: 'var(--space-2) 0 0' }}>
+              Biggest opportunity: <strong>{mastery.data.biggestOpportunity.moduleName}</strong>{' '}
+              <span style={{ color: 'var(--color-text-muted)' }}>
+                - it&apos;s {mastery.data.biggestOpportunity.examSharePercent}% of the exam, and{' '}
+                {mastery.data.biggestOpportunity.pointsBelowPassMark} points of it are still to come.
+              </span>
+            </p>
+          )}
+
+          {/*
+            A forecast of working through the material, NOT of being ready to pass.
+            It lives with the coverage bars rather than under the odds of passing,
+            because under the odds it read as a "ready by" date - which the
+            client's decision log rejects. Readiness itself has no date.
+          */}
+          {published?.forecast.expectedFinishDate && published.forecast.itemsRemaining > 0 && (
+            <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem', margin: 'var(--space-2) 0 0' }}>
+              {published.forecast.frozen ? (
+                <>
+                  At your last pace you&apos;d have worked through the whole course by around{' '}
+                  {formatShortDate(published.forecast.expectedFinishDate)} - picks back up when you do.
+                </>
+              ) : (
+                <>
+                  At this pace you&apos;ll have worked through the whole course by around{' '}
+                  {formatShortDate(published.forecast.expectedFinishDate)}.
+                </>
+              )}
+            </p>
+          )}
         </div>
-      )}
+      </div>
+
+      <WeeklyActivityCard qualificationSlug={qualification.slug} />
     </Card>
   );
 }

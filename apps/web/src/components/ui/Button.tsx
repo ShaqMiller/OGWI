@@ -17,7 +17,7 @@ export function Button({ variant = 'primary', style, ...rest }: ButtonProps) {
 
   const variantStyle =
     variant === 'primary'
-      ? { background: 'var(--color-primary)', color: '#0a0a0a' }
+      ? { background: 'var(--color-cta)', color: 'var(--color-on-cta)' }
       : { background: 'transparent', color: 'var(--color-text)', borderColor: 'var(--color-border)' };
 
   return <button {...rest} style={{ ...base, ...variantStyle, ...style }} />;

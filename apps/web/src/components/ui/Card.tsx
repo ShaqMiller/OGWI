@@ -12,7 +12,7 @@ export function Card({
       style={{
         background: 'var(--color-bg-elevated)',
         border: '1px solid var(--color-border)',
-        borderRadius: 'var(--radius)',
+        borderRadius: 14,
         padding: 'var(--space-4)',
         ...style,
       }}

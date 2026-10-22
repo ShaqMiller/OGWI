@@ -42,7 +42,7 @@ export default function OggiPage() {
   }
 
   return (
-    <div style={{ maxWidth: 640 }}>
+    <div style={{ maxWidth: 760 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 style={{ margin: 0 }}>Oggi</h1>
         <Badge tone="warning">Preview - Oggi&apos;s real AI brain is coming soon</Badge>
@@ -60,7 +60,7 @@ export default function OggiPage() {
                 alignSelf: message.from === 'oggi' ? 'flex-start' : 'flex-end',
                 maxWidth: '80%',
                 background: message.from === 'oggi' ? 'var(--color-border)' : 'var(--color-primary)',
-                color: message.from === 'oggi' ? 'var(--color-text)' : '#0a0a0a',
+                color: message.from === 'oggi' ? 'var(--color-text)' : 'var(--color-on-cta)',
                 padding: '0.5rem 0.85rem',
                 borderRadius: 'var(--radius)',
               }}

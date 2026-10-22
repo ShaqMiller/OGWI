@@ -53,44 +53,55 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
     if (previous !== null && previous !== currentTopicId) publish();
   }, [sessionLoaded, currentTopicId, publish]);
 
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  // Tagged with the item it belongs to. onSuccess invalidates composition,
-  // so the next item can arrive while feedback is still showing - untagged,
-  // one question's answer key would get painted onto a different question.
-  const [marked, setMarked] = useState<{ itemId: string; correctOptionIndex: number } | null>(null);
+  // A snapshot of the question being answered. onSuccess invalidates
+  // composition, so the next item usually arrives before the feedback pause
+  // is over; rendering from the snapshot keeps the answered question and its
+  // verdict on screen for the whole pause instead of swapping in the next one.
+  const [answered, setAnswered] = useState<{
+    prompt: string;
+    options: string[];
+    selectedOption: number;
+    correctOptionIndex: number | null;
+  } | null>(null);
 
   const currentItem = nextSession.data?.topicQuizItems[0] ?? null;
   const prompt = useKnowledgeItemPrompt(currentItem?.knowledgeItemId ?? null);
 
   function selectOption(index: number) {
-    if (selectedOption !== null || !prompt.data || !currentItem) return;
+    if (answered !== null || !prompt.data || !currentItem) return;
 
-    const answeredItemId = currentItem.knowledgeItemId;
-    setSelectedOption(index);
+    setAnswered({
+      prompt: prompt.data.prompt,
+      options: prompt.data.options,
+      selectedOption: index,
+      correctOptionIndex: null,
+    });
 
     submitAnswer.mutate(
       {
-        knowledgeItemId: answeredItemId,
+        knowledgeItemId: currentItem.knowledgeItemId,
         renderingId: prompt.data.renderingId,
         answer: { kind: 'option_index', selectedOptionIndex: index },
       },
       {
         onSuccess: (result) => {
-          setMarked({ itemId: answeredItemId, correctOptionIndex: result.correctOptionIndex });
-          setTimeout(() => {
-            setSelectedOption(null);
-            setMarked(null);
-          }, 900);
+          setAnswered(
+            (current) => current && { ...current, correctOptionIndex: result.correctOptionIndex },
+          );
+          setTimeout(() => setAnswered(null), 900);
         },
         // Unlock so the learner can retry rather than being stranded on a
         // locked, unmarked question.
-        onError: () => setSelectedOption(null),
+        onError: () => setAnswered(null),
       },
     );
   }
 
-  const markedForCurrentItem =
-    marked && marked.itemId === currentItem?.knowledgeItemId ? marked.correctOptionIndex : null;
+  const shownQuestion =
+    answered ??
+    (currentItem && prompt.data
+      ? { ...prompt.data, selectedOption: null, correctOptionIndex: null }
+      : null);
 
   return (
     <div style={{ maxWidth: 640 }}>
@@ -148,13 +159,13 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
           </div>
         )}
 
-        {currentItem && prompt.data && (
+        {shownQuestion && (
           <div style={{ marginTop: 'var(--space-4)' }}>
-            <p>{prompt.data.prompt}</p>
+            <p>{shownQuestion.prompt}</p>
             <MultipleChoiceOptions
-              options={prompt.data.options}
-              correctOptionIndex={markedForCurrentItem}
-              selectedOption={selectedOption}
+              options={shownQuestion.options}
+              correctOptionIndex={shownQuestion.correctOptionIndex}
+              selectedOption={shownQuestion.selectedOption}
               onSelect={selectOption}
             />
           </div>
@@ -166,8 +177,8 @@ export default function QualificationDashboardPage({ params }: { params: { slug:
           </p>
         )}
 
-        {currentItem && !prompt.data && <p>Loading question...</p>}
-        {!currentItem && !nextSession.data?.qualificationComplete && <p>Loading...</p>}
+        {!answered && currentItem && !prompt.data && <p>Loading question...</p>}
+        {!answered && !currentItem && !nextSession.data?.qualificationComplete && <p>Loading...</p>}
       </Card>
     </div>
   );

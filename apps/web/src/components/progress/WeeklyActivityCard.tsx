@@ -33,7 +33,13 @@ export function WeeklyActivityCard({ qualificationSlug }: { qualificationSlug: s
     <div style={{ marginTop: 'var(--space-4)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 'var(--space-2)' }}>
         <strong style={{ fontSize: '0.9rem' }}>
-          {week.data?.isCurrentWeek ? 'This week so far' : `Week of ${weekLabel(week.data?.weekStart ?? '')}`}
+          {!week.data
+            ? weeksAgo === 0
+              ? 'This week so far'
+              : 'Earlier week'
+            : week.data.isCurrentWeek
+              ? 'This week so far'
+              : `Week of ${weekLabel(week.data.weekStart)}`}
         </strong>
         <span style={{ display: 'flex', gap: 'var(--space-2)' }}>
           <Button variant="secondary" onClick={() => setWeeksAgo((current) => current + 1)}>
